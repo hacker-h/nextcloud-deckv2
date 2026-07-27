@@ -37,7 +37,7 @@ every commit, in local history and on the GitHub remote.
 ### 2.1 Core problems being solved
 
 1. **Speed.** Deck's UI blocks on every round-trip. Measured server-side cost of a
-   card move is ~2.9 s/card (see §3.2), so optimistic UI is the only thing that can
+   card move is ~1.2–1.5s/card (measured, §3.2), so optimistic UI is the only thing that can
    make this usable — it is the reason the project exists, not a nice-to-have.
 2. **No multi-select.** Deck cannot select several cards and move them together.
    This is the headline feature.
@@ -110,12 +110,15 @@ Consequences that drive the architecture:
 
 - Moving into a 200-card stack ≈ 200 UPDATEs. Bulk-moving N cards into a stack of M
   is **O(N×M)** — 20 cards into a 200-card stack ≈ 4000 UPDATEs.
-- **Parallel reorders targeting the same stack will race**, because each recomputes
-  ordering from its own snapshot. Concurrency must be *serialized per target stack*
-  and *parallel across stacks*.
-- Measured baseline (`BENCHMARKS.md`, dedicated test instance): 2.90 s/card
-  sequential move; reads ~600 ms for a 200-card stack; card creation parallelizes
-  at 4.95× with 8 workers.
+- Measured M0.3: `reorder()` on a 40-card stack took **6.5–7.5s**, versus **1.2–1.5s**
+  for `update()`. Cost grows with stack size; your real boards are larger.
+
+> **RESOLVED IN M0 — `reorder()` is not used at all.** It is CORS-blocked from the
+> browser, ~5× slower, and orphans labels on cross-board moves. All mutations go
+> through `PUT /api/v1.0/boards/{b}/stacks/{s}/cards/{c}` instead. See
+> `M0-RESULTS.md`. The per-stack serialization rule below is therefore obsolete:
+> `update()` writes a single row and does not reindex, so the queue can be broadly
+> parallel (cap ~6–8) provided each card carries a distinct `order` (§3.6).
 
 ### 3.3 Move history already exists server-side, and is complete
 
@@ -143,34 +146,82 @@ Caveats:
 - `user` column is `nextcloud`; the real actor is in `subjectparams.author`.
 - The REST filter is per `object_id`. Board-wide feeds may need a different filter;
   M0 determines whether `object_type=deck` board-scoped querying is viable.
+- **The Activity API is CORS-blocked** (M0.1): preflight returns 405 with no CORS
+  headers. Resolved by adding CORS headers on the alias host — see
+  `CORS-DECISION.md`. Needed for M5 only; M1–M4 are unaffected.
 
 A local journal is still needed, but only as a small **in-flight overlay** covering
 the window between optimistic render and server confirmation.
 
 ### 3.4 Cheap change detection exists
 
-- `GET /api/v1.0/boards` honours **`If-Modified-Since`** and sets an **ETag**
-  (`BoardApiController::index`, lines 48–64).
+- `GET /api/v1.0/boards` sets an **ETag** (`BoardApiController::index`, lines 48–64).
 - `GET /boards/{id}` and `GET /stacks/{id}` also set ETags.
 
-So polling can be: `If-Modified-Since` on `/boards` (cheap 304), then refetch only
-changed stacks. Combined with refresh-on-window-focus and a slow background
-interval, this satisfies "as fast as possible without unreasonable load".
+> **CORRECTED IN M0.4:** `If-Modified-Since` returns **HTTP 500** — Nextcloud's
+> `Util::parseHTTPDate` rejects the standard header format. Use **`If-None-Match`
+> exclusively**. Measured: 304 in 0.14s with zero payload, versus 11820 bytes for a
+> full fetch.
+
+Polling: `If-None-Match` on `/boards` on window focus plus a slow background
+interval (~30s), then refetch only stacks whose ETag changed. Negligible load.
+
+### 3.6 Sparse ordering is mandatory (new, from M0.4)
+
+`update()` does not reindex the target stack — it writes exactly the `order` given.
+That is what makes it fast, but ordering becomes the client's responsibility.
+
+Measured: six parallel moves all sending `order: 0` produced six cards sharing
+`order=0`, rendering in arbitrary sequence. Repeating with values spaced 65536 apart
+placed every card on its own slot under full parallelism.
+
+Adopt Trello's model: space by **65536**, insert between neighbours by bisecting
+(`(a+b)/2`), re-space lazily on read when a gap closes. `order` is `bigint`, so
+headroom is effectively unlimited. O(1) writes, safe parallelism, no reindexing.
+
+Deck's own UI renumbers stacks densely whenever it touches one; harmless, since we
+re-space from the next read.
+
+### 3.7 Read-after-write is stale (new, from M0)
+
+Deck's read endpoints repeatedly returned pre-write state immediately after a
+successful mutation (Redis-backed caching); Postgres was correct every time.
+Optimistic UI hides this by construction, but **no code may verify a write by
+immediately re-reading it**.
 
 ### 3.5 `deckv2.xhacker.de` makes the SPA cross-origin
 
-This **reverses the original same-origin assumption** and has real consequences:
+This **reverses the original same-origin assumption**:
 
-- Nextcloud session cookies will not be sent → auth must use app-password Basic Auth
-  (hence `secrets.env`) or a Nextcloud login-flow token.
-- CORS becomes load-bearing. Deck's API controllers carry `@CORS` annotations, but
-  credentialed requests require `Access-Control-Allow-Credentials: true` and an
-  explicit origin (no wildcard).
-- Requires DNS record, nginx-proxy vhost, and a Let's Encrypt certificate.
+- Nextcloud session cookies are not sent → auth is app-password Basic Auth
+  (hence `secrets.env`).
+- CORS is load-bearing.
+- Requires a DNS record, an nginx-proxy vhost, and a Let's Encrypt certificate.
 
-**This is the highest-risk unknown and is tested first in M0.** If Deck does not
-emit usable CORS headers, fallbacks are (a) inject headers at nginx-proxy, or
-(b) serve under `nextcloud.xhacker.de/board/` and regain same-origin.
+**Verified in M0.1.** CORS works, with three constraints:
+
+1. Only the `/index.php/apps/deck/api/v1.0` prefix is CORS-enabled. The internal
+   app prefix (`/apps/deck/cards/{id}/reorder`) and the OCS activity endpoint both
+   return **405 on preflight with no CORS headers**.
+2. **`OCS-APIRequest` must not be sent from the browser** — it is absent from
+   `access-control-allow-headers`, so sending it fails preflight. Verified it is not
+   required: `GET /boards` without it returns 200 and valid JSON.
+3. `Access-Control-Allow-Credentials: false` is irrelevant — we authenticate with an
+   `Authorization` header, not cookies.
+
+**Deployment (decided, see `CORS-DECISION.md`):** the SPA is served from
+`deckv2.xhacker.de` but calls the API on the pre-existing, zero-traffic alias
+`nextcloud-alice.xhacker.de`. CORS headers are added **only on the alias**, so the
+production `nextcloud.xhacker.de` vhost is never modified.
+
+> **Trap:** nginx-proxy includes `vhost.d/<host>` *instead of* `vhost.d/default`
+> (`nginx.tmpl:738–741`), and `default` holds the only ACME challenge block. A
+> host-specific file that omits that block silently breaks Let's Encrypt renewal,
+> and the cert expires ~60 days later. Any `vhost.d/<host>` file must re-include it.
+
+Auth consequence: the app password is a **long-lived credential in the browser**.
+Keep it in a scoped store, never in `localStorage` beside cached board data, and
+rely on it being independently revocable in Nextcloud settings.
 
 ---
 
@@ -179,8 +230,8 @@ emit usable CORS headers, fallbacks are (a) inject headers at nginx-proxy, or
 ```
 packages/
   core/          @deckv2/core — shared, framework-agnostic TypeScript
-    api/         Deck REST client (three prefixes, auth, ETag handling)
-    queue/       mutation queue: per-stack serialization, cross-stack parallelism
+    api/         Deck REST client (api/v1.0 prefix only, auth, ETag handling)
+    queue/       mutation queue: bounded parallelism (~6–8), sparse ordering
     store/       optimistic state, precise per-operation rollback
     history/     Activity fetch, dedupe, grouping, undo/redo model
     ops/         semantic operations — the single shared surface (§10)
@@ -191,6 +242,31 @@ packages/
 `packages/core/ops` is the contract: the UI and AI agents call **the same
 functions**. No duplicated logic, no drift, and improvements to queueing or
 optimistic behaviour benefit both automatically.
+
+### 4.0 The single mutation primitive
+
+Every card mutation — move within a stack, move across stacks, move across boards,
+rename — uses:
+
+```
+PUT /index.php/apps/deck/api/v1.0/boards/{targetBoardId}/stacks/{targetStackId}/cards/{cardId}
+```
+
+Three rules the core client enforces, each verified in M0:
+
+1. **The target stack goes in the URL path, not the body.** `CardApiController::update`
+   reads `stackId` from the request params, and the path parameter wins. Sending the
+   target only in the body returns **HTTP 200 with the card unmoved** — a silent
+   no-op that looks like success.
+2. **Read-modify-write.** `update()` overwrites `title`, `type`, `owner` and
+   `description`, so current values must be resent or they are destroyed. Callers
+   never assemble payloads by hand.
+3. **Always send an explicit sparse `order`** (§3.6), otherwise parallel moves
+   collide.
+
+Bonus: this endpoint rebinds labels correctly on cross-board moves
+(`CardService.php:329–351` — match by title, clone if missing, reassign), which
+`reorder()` does not do.
 
 ### 4.1 Optimistic mutation model
 
@@ -205,11 +281,13 @@ Requirements:
 - Snapshot the pre-state **per operation** so rollback is exact.
 - Many operations may be in flight simultaneously; rolling back a failed one must
   **not** clobber later successful changes.
-- Bulk moves dispatch in parallel (respecting §3.2's per-stack serialization).
-  Partial success is normal: roll back only the cards that actually failed.
-- Because moves cost ~2.9 s/card server-side, a 6-card bulk move is still landing
-  ~18 s after the UI shows it done. Per-card status (`pending` → `confirmed` →
-  `failed`) is surfaced in the history panel rather than hidden.
+- Bulk moves dispatch in parallel with a bounded pool (~6–8), each card carrying a
+  distinct sparse `order`. Partial success is normal: roll back only the cards that
+  actually failed.
+- Measured cost is **~1.2–1.5s/card**, and 6 parallel moves complete in **~4.3s
+  wall**. So a bulk move is still landing for a few seconds after the UI shows it
+  done. Per-card status (`pending` → `confirmed` → `failed`) is surfaced in the
+  history panel rather than hidden.
 
 ---
 
@@ -240,29 +318,76 @@ would be far more expensive.
 
 ## 6. Multi-select specification
 
-Trello-identical:
+**Rewritten from measurement.** Trello was observed live; see `TRELLO-UX-SPEC.md`.
+Two assumptions in the original spec were wrong.
 
-- **Click** — replace selection with the clicked card.
-- **Cmd/Ctrl + click** — toggle a single card in/out of the selection.
-- **Shift + click** — the first shift+click sets the anchor and enters selection
-  mode; each subsequent shift+click selects the whole range between anchor and
-  target. Deselecting everything exits the mode until the next shift+click.
-  (Cmd must work — the user is on macOS.)
-- **Escape**, or click on empty board space — clear the selection.
-- Selected cards are strongly highlighted: border **and** contrasting background,
-  not a faint shadow.
+**Shift is the only selection modifier. There is no Cmd/Ctrl+click.** Measured:
+Cmd+click opens the card in a new browser tab — the browser claims the modifier
+before the page sees it. It is not implementable, and Trello does not use it.
+
+Measured semantics, to be replicated exactly:
+
+| Action | Result |
+|---|---|
+| Shift+click, nothing selected | Select it; it becomes the anchor |
+| Shift+click another card in the **same** stack | Select the **whole range** anchor→target |
+| Shift+click *backwards* past the anchor | **Union** — keeps the existing range and adds the new one |
+| Shift+click an **already-selected** card | **Toggle that single card off** |
+| Shift+click a card in a **different** stack | Add **only that card** — ranges never span stacks |
+| `Escape`, or click empty board space | Clear the selection |
+
+```
+shift+click idx2            -> {2}
+shift+click idx5            -> {2,3,4,5}        range
+shift+click idx0            -> {0,1,2,3,4,5}    union, not replacement
+shift+click idx3 (selected) -> {2,4,5}          toggles idx3 off
+```
+
+Shift+click therefore serves double duty — **range-extend** on unselected cards,
+**toggle-off** on selected ones. That single rule is why no second modifier exists.
+
+- **Plain click must not reset the selection.** In Trello a plain click opens the
+  card detail. For us: plain click on a card opens the Deck deep-link; plain click
+  on empty space clears.
+- Selected cards get a saturated outline (Trello: `2px rgb(0,95,204)`) plus a
+  contrasting background.
 - A counter shows the number of selected cards.
 - No artificial limit on selection size.
-
-Open detail, to be resolved in M2.5: whether a shift-range spans stacks or is
-confined to one stack.
+- **No transition on selection state.** Trello measures `transition-duration: 0s`;
+  instant feedback is a large part of why it feels fast.
 
 ### Bulk move — both paths required
 
 1. **Menu/keyboard** (built first, more robust): "Move selection to → «stack»".
+   Trello has **no equivalent** — no bulk-action toolbar exists for a shift
+   selection — so this is our own design, not an imitation.
 2. **Drag** — dragging any selected card takes the entire selection. The drag
    preview shows a stacked impression plus a count. On drop, all cards land in the
    target stack **in their original relative order**.
+
+### Drag implementation
+
+Trello uses Atlassian Pragmatic DnD over the **native HTML5 drag API**. Do **not**
+copy that choice: native DnD cannot be driven by synthetic pointer events, so it
+would make our own Playwright E2E tests impossible (verified — probes at 1–8px
+produced no drag).
+
+Use **pointer events** (`pointerdown`/`pointermove`/`pointerup`) with a ~4–5px
+activation threshold. Testable, full control over the stacked multi-card preview,
+identical behaviour on touch, and no browser-imposed drag image. Combined with
+`user-select: none` this resolves the original hitbox complaint.
+
+### Visual metrics (measured from Trello)
+
+| Property | Value |
+|---|---|
+| Card height / pitch | **36px / 44px** (8px gap) |
+| List width | **272px** |
+| Card radius / list radius | 8px / 12px |
+| Card font size | 14px |
+| Selected outline | `2px rgb(0,95,204)` |
+| `user-select` | `none` on card **and** title |
+| `transition-duration` | `0s` |
 
 ---
 
@@ -336,7 +461,7 @@ Readability rules:
 - **Round-trip detection** — A→B→A renders as *"returned to A"* rather than two
   noisy rows. This is what makes the log reviewable instead of exhausting.
 - Cross-board moves are visually distinct.
-- In-flight status is shown per card, honestly reflecting the ~2.9 s/card lag.
+- In-flight status is shown per card, honestly reflecting the ~1.2–1.5s/card lag.
 
 **Undo/redo** — dedicated buttons in the history panel/bar, caption swapping
 between Undo and Redo. Undo operates on a whole batch, so a 6-card bulk move is
@@ -356,8 +481,8 @@ calling the same functions.
 `packages/core/ops` exposes semantic, batch-oriented, idempotent operations, e.g.
 `moveCards(cardIds, target)`, `listBoard(boardRef)`, `createCard(...)`,
 `undoBatch(batchId)`. These accept human-friendly refs (board/stack titles), not
-just numeric IDs, and internally use the same queue that protects against the
-O(n) reorder and same-stack races.
+just numeric IDs, and internally use the same queue, sparse ordering and
+read-modify-write handling described in §4.0.
 
 `packages/agent` is a thin CLI/MCP wrapper over exactly those functions — no
 independent code path, so agents and UI cannot drift.
@@ -367,81 +492,97 @@ semantics but is not a runtime dependency.
 
 ---
 
-## 11. Trello UX study (M2.5)
+## 11. Trello UX study — **DONE**
 
-Playwright session on Trello test boards; the user logs in manually, then hands
-over the browser. Captured as a written spec with **measured numbers**, which
-becomes the acceptance criteria for M3/M4:
+Completed. Full findings in **`TRELLO-UX-SPEC.md`**; §6 above was rewritten from it.
 
-- Shift+click range semantics, especially across stack boundaries, and where the
-  anchor resets.
-- Drag threshold in px before a click becomes a drag (directly relevant to the
-  broken-hitbox complaint).
-- Drop-placeholder behaviour and the commit point for a new slot.
-- The multi-card stacked drag preview.
-- Inbox drop targeting and behaviour during a board switch mid-drag.
-- Board switcher MRU ordering and keyboard navigation.
-- Animation durations/easing.
+Headline results:
+- **No Cmd/Ctrl+click multi-select exists** — it opens a browser tab. Shift is the
+  only modifier, doing range-extend *and* toggle-off.
+- Backwards shift+click **unions** rather than replacing.
+- Ranges **never span lists**.
+- **`transition-duration: 0s`** — no animation on selection or reorder.
+- Measured metrics: 36px card / 44px pitch / 272px list / 8px+12px radii.
+- Board switcher confirms **MRU + search**; inbox confirms top-insert + collapsible.
 
-Out of bounds: scraping Trello's network traffic, DOM or CSS. Different data model,
-no benefit, proprietary.
+Could not be measured, because Trello uses native HTML5 DnD which synthetic pointer
+events cannot trigger: drag threshold, drop-placeholder timing, stacked drag
+preview. Mitigated by choosing pointer events ourselves (§6) and designing the
+preview from the user's screenshots. Trello also has **no bulk-action toolbar**, so
+the bulk-move menu has no precedent to copy.
 
----
-
-## 12. M0 — the spike
-
-**Rule: no application code until M0 is reported and reviewed.** All destructive
-tests run on throwaway boards; the 4058 live cards are never touched. ZFS snapshots
-provide the safety net.
-
-Ordered by risk:
-
-### M0.1 CORS + auth (highest risk — a wall here changes the deployment)
-- Can `https://deckv2.xhacker.de` call the Deck API cross-origin with app-password
-  Basic Auth?
-- Are preflight `OPTIONS` handled, and is `Access-Control-Allow-Credentials: true`
-  returned with an explicit origin?
-- Does `OCS-APIRequest: true` remain sufficient?
-- If it fails: nginx-proxy header injection, or fall back to same-origin
-  `nextcloud.xhacker.de/board/`.
-
-### M0.2 Cross-board move safety (gates the inbox design)
-- Move a card with labels, an assignee and a due date to a board and back.
-- **Diff the Postgres row and all related rows before/after.** Do labels survive,
-  dangle, or vanish? What about assignees and ACL?
-- Compare both candidate endpoints (`/cards/{id}/reorder` vs the API-prefixed one).
-- If labels do not survive, the inbox needs explicit preserve-and-restore.
-
-### M0.3 Reorder cost and concurrency (drives the queue design)
-- Time a single move into stacks of ~10 / ~50 / ~200 cards to confirm O(n).
-- Time a 10-card bulk move, sequential vs parallel.
-- **Deliberately race** parallel reorders into the same stack and check whether
-  ordering corrupts — this validates the per-stack serialization rule.
-- Determine a safe concurrency limit across distinct stacks.
-
-### M0.4 Change detection
-- Verify `If-Modified-Since` + ETag on `/boards` really returns 304.
-- Measure the cost of a no-change poll, and settle the polling interval.
-
-### M0.5 Activity API for history
-- Can activity be queried board-wide, or only per `object_id`?
-- Confirm dedupe strategy for the per-user duplicate rows.
-- Confirm `subjectparams.author` is the reliable actor field.
-- Measure the cost of backfilling history for a busy board.
-
-**Deliverable:** measured results, real response bodies, and a written
-recommendation — plus explicit callouts wherever a stated assumption turns out to
-be wrong.
+Out of bounds (respected): scraping Trello's network traffic or proprietary code.
 
 ---
 
-## 13. Open questions
+## 12. M0 — the spike — **DONE**
 
-1. **Labels on cross-board moves** — behaviour unknown until M0.2. Gates the inbox.
-2. **CORS viability** from `deckv2.xhacker.de` — M0.1. May change the deployment.
-3. **Shift-range across stacks** — resolve in M2.5 by observing Trello.
-4. **Board-wide activity querying** — M0.5; may affect how history is loaded.
-5. **nginx-proxy vhost + DNS + TLS for `deckv2.xhacker.de`** — needs the user's
-   approval to modify proxy configuration.
-6. **Framework choice** (Svelte vs Preact) — decide at M1; both satisfy the
+Executed against the live instance on throwaway boards `[deckv2-spike] A/B`, purged
+afterwards; live card count verified back at exactly **4058**. Full measurements in
+**`M0-RESULTS.md`**.
+
+| Sub-spike | Outcome |
+|---|---|
+| M0.1 CORS + auth | Works on `/api/v1.0` only; omit `OCS-APIRequest`; app-prefix and activity endpoints are CORS-blocked |
+| M0.2 Cross-board safety | `update()` rebinds labels correctly; `reorder()` orphans them |
+| M0.3 Cost | `reorder()` 6.5–7.5s vs `update()` 1.2–1.5s; 6 parallel in 4.3s wall |
+| M0.4 Ordering | `update()` does not reindex → sparse client-side ordering mandatory |
+| M0.5 Change detection | `If-None-Match` → 304 in 0.14s; `If-Modified-Since` → **HTTP 500** |
+
+Assumptions proven wrong, and corrected above: the reorder endpoint choice
+(§3.2/§4.0), `If-Modified-Since` (§3.4), per-stack serialization (§3.2/§4.1), and
+`OCS-APIRequest` in the browser (§3.5).
+
+Still open from M0.5: whether activity can be queried **board-wide** rather than per
+`object_id`. Affects only how M5 loads history, not whether it works.
+
+---
+
+## 13. Deployment tasks (for M-deploy)
+
+Decided: **`deckv2.xhacker.de` for the SPA**, API on `nextcloud-alice.xhacker.de`.
+None of this blocks M1–M4, which run from a local dev server.
+
+1. **DNS** — add a dedicated resource in `~/src/gitlab.com/terraform/services/alice.tf`:
+   ```hcl
+   resource "cloudflare_record" "deckv2_alice_cname_de" {
+     zone_id = data.cloudflare_zone.xhacker_de.id
+     name    = "deckv2"
+     type    = "CNAME"
+     content = "alice.xhacker.de"
+     proxied = false
+     ttl     = 60
+   }
+   ```
+   It must be its own resource: the existing `alice_service_records` set derives
+   names as `<service>-alice`, which would yield the wrong hostname.
+   Credentials are in git-crypted `services/terraform.tfvars`; `services/` uses a
+   GitLab HTTP backend, and `docs/state.md` requires a state/zone backup first.
+2. **SPA vhost** — a static-file container with `VIRTUAL_HOST=deckv2.xhacker.de` and
+   `LETSENCRYPT_HOST`, auto-detected by nginx-proxy + acme-companion.
+3. **CORS on the alias** — `/etc/nginx/vhost.d/nextcloud-alice.xhacker.de`, which
+   **must re-include the ACME challenge block** (see §3.5 trap), plus CORS headers
+   for `deckv2.xhacker.de` and `OPTIONS` → 204.
+4. **FritzBox rebind exception** — likely unnecessary: measured from the LAN, the
+   FritzBox already resolves `nextcloud-alice.xhacker.de` → `alice.xhacker.de` →
+   the public IPv6 address, identical to public DNS. Re-test once the record exists.
+   **Note:** the `fritzbox` CLI has **no** DNS-rebind command today (subcommands:
+   `hosts, show, rename, rename-prefix, wake, wan-access, monitor, blocklist, fax,
+   vpn`), despite `terraform/docs/dns.md` prescribing it. If needed, it must be
+   built first, modelled on the existing `blocklist` web-API subcommand.
+5. **Verify** — preflight returns the right ACAO; ACME path still resolves on the
+   alias; generated config for `nextcloud.xhacker.de` is byte-identical (`diff`).
+
+---
+
+## 14. Open questions
+
+1. **Framework choice** (Svelte vs Preact) — decide at M1; both satisfy the
    constraints.
+2. **Board-wide activity querying** — affects M5 history loading only.
+3. **Inbox stack rendering** — if the inbox board grows more than one stack, show
+   only the first or all? Defaults to first.
+
+Everything else is resolved: labels survive via `update()` (M0.2), CORS works with
+the alias-host design (`CORS-DECISION.md`), shift-range semantics are measured
+(`TRELLO-UX-SPEC.md`), and the DNS path is specified above.
