@@ -71,29 +71,115 @@ nextcloud-nextcloud-1                        <- same container as production
 
 Blast radius of a mistake: a host nothing currently uses.
 
-### Steps
+### Prerequisites (DNS, TLS, LAN resolution)
 
-1. **DNS** — `deckv2.xhacker.de` → alice, via Cloudflare (nameservers
-   `delilah/garret.ns.cloudflare.com`). Match the proxy mode of the existing
-   `xhacker.de` records.
-2. **SPA vhost** — new container (static file server) with
-   `VIRTUAL_HOST=deckv2.xhacker.de` + `LETSENCRYPT_HOST`, picked up automatically
-   by nginx-proxy and acme-companion.
-3. **CORS on the alias** — create
-   `/etc/nginx/vhost.d/nextcloud-alice.xhacker.de` containing:
-   - the **ACME challenge block copied verbatim from `default`** (mandatory, see
-     above), and
-   - CORS headers for `deckv2.xhacker.de` on the OCS/activity paths, including
-     `OPTIONS` preflight handling returning 204.
-4. **Verify before relying on it**: preflight returns
-   `access-control-allow-origin: https://deckv2.xhacker.de`; the ACME path still
-   resolves on the alias; `nextcloud.xhacker.de` is byte-identical in the generated
-   config (`diff` before/after).
+1. **DNS** — `deckv2.xhacker.de` CNAME → `alice.xhacker.de`, `proxied = false`,
+   TTL 60, via the terraform snippet in PLAN.md §13.
+2. **SPA vhost** — a static-file container with `VIRTUAL_HOST=deckv2.xhacker.de` and
+   `LETSENCRYPT_HOST=deckv2.xhacker.de`; nginx-proxy and acme-companion pick it up
+   automatically and issue the certificate.
+3. **FritzBox rebind exception** — the `fritzbox` CLI now ships a `dns-rebind`
+   subcommand (`list / add / remove / import / export`, with automatic backups).
+   Verified: **191** exceptions exist, `nextcloud-alice.xhacker.de` is already
+   among them, `deckv2.xhacker.de` is **not**. So after the DNS record exists:
+
+   ```sh
+   .venv/bin/python3 fritzbox_cli.py --address 192.168.0.1 --tls false \
+     dns-rebind add deckv2.xhacker.de
+   ```
+
+   **Gotcha:** `fritz.env` points `URL` at the remote MyFRITZ endpoint
+   (`…myfritz.net:47883`), which serves an HTML login page rather than TR-064 XML;
+   the CLI then dies with `xml.etree.ElementTree.ParseError`. From the LAN, override
+   with `--address 192.168.0.1 --tls false`. Verified working.
+
+4. Confirm `dig @192.168.0.1 deckv2.xhacker.de` matches `dig @1.1.1.1 …`.
+
+### Measured: which paths need headers, and which must be left alone
+
+| Path | Nextcloud's own `Access-Control-Allow-Origin` |
+|---|---|
+| `/index.php/apps/deck/api/v1.0/...` | **1 header, already correct** |
+| `/ocs/v2.php/apps/activity/...` | **0 headers** |
+
+**This is the decisive safety constraint.** Deck's API already emits a correct ACAO
+for our origin. Adding another at nginx would send the header **twice**, and every
+browser rejects a duplicated `Access-Control-Allow-Origin` outright — which would
+break the API path that currently works.
+
+> **Rule: add CORS headers only on the activity path. Never touch `/index.php/`.**
+
+`add_header` also silently drops inherited headers when redefined in a nested
+`location`, so scoping is doubly important.
+
+### Safe defaults chosen
+
+| Decision | Value | Why |
+|---|---|---|
+| Header scope | `location ^~ /ocs/` only | The only path lacking CORS; avoids duplication |
+| Allowed origin | literal `https://deckv2.xhacker.de` | No regex, no `$http_origin` reflection, no wildcard |
+| `Allow-Credentials` | **not set** | We use `Authorization`, not cookies. Omitting it keeps the header set minimal |
+| Allowed headers | `Authorization, Content-Type, Accept, OCS-APIRequest` | Exactly what the client sends; OCS *does* require `OCS-APIRequest` |
+| Allowed methods | `GET, OPTIONS` | History is read-only. No write methods exposed |
+| `always` flag | yes | Headers must survive 304/4xx, and activity returns 304 often |
+| Preflight | `OPTIONS` → 204, no body | Standard, cheap |
+| ACME block | copied verbatim from `default` | Mandatory (see trap above) |
+
+Least privilege throughout: one origin, one path prefix, read-only methods.
+
+### Config to install as `/etc/nginx/vhost.d/nextcloud-alice.xhacker.de`
+
+```nginx
+## MUST be kept: vhost.d/<host> REPLACES vhost.d/default, which holds this block.
+## Removing it breaks Let's Encrypt renewal (cert expires ~60 days later).
+location ^~ /.well-known/acme-challenge/ {
+    auth_basic off;
+    auth_request off;
+    allow all;
+    root /usr/share/nginx/html;
+    try_files $uri =404;
+    break;
+}
+
+## CORS for the SPA — ONLY on /ocs/ (activity API).
+## Deliberately NOT applied to /index.php/, where Deck already sets ACAO itself;
+## a second header there would be a duplicate and browsers would reject it.
+location ^~ /ocs/ {
+    if ($request_method = OPTIONS) {
+        add_header Access-Control-Allow-Origin  "https://deckv2.xhacker.de" always;
+        add_header Access-Control-Allow-Methods "GET, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Authorization, Content-Type, Accept, OCS-APIRequest" always;
+        add_header Access-Control-Max-Age       1728000 always;
+        add_header Content-Length 0;
+        return 204;
+    }
+    add_header Access-Control-Allow-Origin  "https://deckv2.xhacker.de" always;
+    add_header Access-Control-Expose-Headers "ETag" always;
+
+    proxy_pass http://nextcloud-alice.xhacker.de;
+    set $upstream_keepalive false;
+}
+```
+
+`Expose-Headers: ETag` is required — without it JS cannot read the ETag, and §3.4
+polling depends on it.
+
+### Verification (all must pass before relying on it)
+
+1. `diff` the generated `default.conf` before/after — the `nextcloud.xhacker.de`
+   server block must be **byte-identical**.
+2. Preflight on `/ocs/` returns 204 with exactly **one** ACAO.
+3. `/index.php/apps/deck/api/v1.0/boards` still returns exactly **one** ACAO
+   (regression check for duplication).
+4. `curl http://nextcloud-alice.xhacker.de/.well-known/acme-challenge/probe`
+   still routes to the ACME handler (404 from the challenge root, not a proxy pass).
+5. `nginx -t` before reload; reload rather than restart.
+6. Production smoke test: `nextcloud.xhacker.de` still serves 200.
 
 ### Rollback
 
-Delete the vhost.d file and reload nginx. Since production config is never touched
-and the alias is unused, rollback is immediate and observable.
+Delete the vhost.d file, `nginx -t`, reload. Production config is never touched and
+the alias carries no traffic, so rollback is immediate and observable.
 
 ---
 
