@@ -129,6 +129,7 @@
     height: var(--topbar-h);
     flex: 0 0 var(--topbar-h);
     padding: 0 12px;
+    background: var(--topbar-bg);
     border-bottom: 1px solid var(--border);
   }
   .stat { font-size: 12px; color: var(--text-dim); }

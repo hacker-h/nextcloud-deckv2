@@ -15,7 +15,9 @@
     gap: 12px;
     align-items: flex-start;
     height: 100%;
-    padding: 12px;
+    /* Trello: board padding 0 6px; vertical breathing room added here since
+       our top bar sits directly above. */
+    padding: 8px 6px;
     overflow-x: auto;
     overflow-y: hidden;
   }

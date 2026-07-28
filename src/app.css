@@ -1,24 +1,32 @@
-/* Design tokens. Metrics measured from Trello (.sisyphus/TRELLO-UX-SPEC.md §2). */
+/* Design tokens lifted from Trello's dark theme (Atlassian Design System),
+   read out of the live app via getComputedStyle. See TRELLO-UX-SPEC.md.
+   Values are Trello's own --ds-* tokens, not approximations. */
 :root {
-  --card-h: 36px;
+  /* Structure */
   --card-gap: 8px;
   --stack-w: 272px;
   --card-radius: 8px;
   --stack-radius: 12px;
   --font-size: 14px;
-
-  --bg: #1d2125;
-  --stack-bg: #161a1d;
-  --card-bg: #22272b;
-  --card-bg-hover: #2c333a;
-  --text: #b6c2cf;
-  --text-dim: #8c9bab;
-  --accent: #579dff;
-  --border: #2c333a;
-  --danger: #f87168;
-
+  --line-height: 20px;
   --topbar-h: 48px;
   --rail-w: 44px;
+
+  /* Trello --ds-* dark tokens */
+  --bg: #1D2125;            /* board canvas, dark theme */
+  --stack-bg: #101204;      /* Trello list background, dark theme */
+  --card-bg: #242528;       /* --ds-surface-raised */
+  --card-bg-hover: #2C2D31; /* raised + neutral overlay */
+  --text: #CECFD2;          /* --ds-text */
+  --text-dim: #A9ABAF;      /* --ds-text-subtle */
+  --border: #E3E4F21F;      /* --ds-border */
+  --accent: #669DF1;        /* --ds-border-selected */
+  --selected-bg: #1C2B42;   /* --ds-background-selected */
+  --danger: #F87168;
+  --topbar-bg: #1F1F21;  /* --ds-surface */
+
+  /* --ds-shadow-raised */
+  --card-shadow: 0 0 0 1px #00000000, 0 1px 1px #01040480, 0 0 1px #01040480;
 }
 
 * { box-sizing: border-box; }
@@ -32,19 +40,19 @@ html, body, #app {
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  /* Trello's stack, minus the proprietary Atlassian Sans */
+  font-family: ui-sans-serif, -apple-system, system-ui, 'Segoe UI', Ubuntu,
+    'Helvetica Neue', sans-serif;
   font-size: var(--font-size);
+  line-height: var(--line-height);
   -webkit-font-smoothing: antialiased;
 }
 
 button { font: inherit; color: inherit; }
 
-/* Thin scrollbars. Default macOS scrollbars are the single biggest giveaway
-   of an unpolished web app. */
+/* Trello uses scrollbar-width:thin with a translucent thumb. */
+* { scrollbar-width: thin; scrollbar-color: #E3E4F21F #CECED912; }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: var(--border);
-  border-radius: 4px;
-}
-::-webkit-scrollbar-thumb:hover { background: #4a545e; }
+::-webkit-scrollbar-track { background: #CECED912; border-radius: 4px; }
+::-webkit-scrollbar-thumb { background: #E3E4F21F; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #E3E4F238; }

@@ -84,8 +84,10 @@
   .trigger:hover { background: var(--card-bg); border-color: var(--border); }
 
   .name {
+    /* Trello board title: 16px / weight 653 / pure white */
     font-size: 16px;
-    font-weight: 700;
+    font-weight: 650;
+    color: #fff;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
