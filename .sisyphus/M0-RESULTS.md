@@ -174,6 +174,14 @@ harmless — we simply re-space from the next read.
 | No cache headers | 200, 11820 bytes, 0.16s |
 
 - **ETag works and is cheap** — a no-change poll costs 0.14s and zero payload.
+- **Correction (found in M1): only `GET /boards` sends an ETag.**
+  `GET /boards/{id}/stacks` sends **none** — verified against the live server and
+  confirmed in `StackApiController::index()`, which never calls `setETag()` (only
+  the single-stack `get()` does). So conditional requests work at the *board list*
+  level only; refetching a board's stacks always transfers the full payload.
+  Options for M2+: poll `/boards` for change detection, or fetch stacks
+  individually via `/stacks/{id}` where ETags do exist (one request per stack,
+  worth measuring before adopting).
 - **`If-Modified-Since` returns 500.** `BoardApiController::index` parses it via
   `Util::parseHTTPDate` and evidently chokes on the standard format. The plan's
   §3.4 assumption was wrong: **use `If-None-Match` exclusively.**

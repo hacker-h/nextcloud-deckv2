@@ -1,0 +1,50 @@
+/* Design tokens. Metrics measured from Trello (.sisyphus/TRELLO-UX-SPEC.md §2). */
+:root {
+  --card-h: 36px;
+  --card-gap: 8px;
+  --stack-w: 272px;
+  --card-radius: 8px;
+  --stack-radius: 12px;
+  --font-size: 14px;
+
+  --bg: #1d2125;
+  --stack-bg: #161a1d;
+  --card-bg: #22272b;
+  --card-bg-hover: #2c333a;
+  --text: #b6c2cf;
+  --text-dim: #8c9bab;
+  --accent: #579dff;
+  --border: #2c333a;
+  --danger: #f87168;
+
+  --topbar-h: 48px;
+  --rail-w: 44px;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  height: 100%;
+  margin: 0;
+  overflow: hidden; /* the board scrolls, never the page */
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-size: var(--font-size);
+  -webkit-font-smoothing: antialiased;
+}
+
+button { font: inherit; color: inherit; }
+
+/* Thin scrollbars. Default macOS scrollbars are the single biggest giveaway
+   of an unpolished web app. */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover { background: #4a545e; }
