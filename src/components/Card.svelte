@@ -1,5 +1,7 @@
 <script>
-  let { card, href } = $props();
+  import { draggable } from '../lib/dnd.svelte.js';
+
+  let { card, href, onDrop } = $props();
 
   const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const due = $derived.by(() => {
@@ -13,7 +15,14 @@
   const hasMeta = $derived(due || hasDesc || card.commentsCount > 0 || card.attachmentCount > 0);
 </script>
 
-<a class="card" {href} target="_blank" rel="noopener noreferrer">
+<a
+  class="card"
+  {href}
+  target="_blank"
+  rel="noopener noreferrer"
+  data-card-id={card.id}
+  use:draggable={() => ({ card, onDrop })}
+>
   <div class="inner">
     {#if labels.length}
       <div class="labels">

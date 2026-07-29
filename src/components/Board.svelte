@@ -1,13 +1,21 @@
 <script>
   import Stack from './Stack.svelte';
-  let { stacks, boardId, client } = $props();
+  import DragPreview from './DragPreview.svelte';
+
+  let { stacks, boardId, client, onDrop } = $props();
 </script>
 
 <div class="board">
   {#each stacks as stack (stack.id)}
-    <Stack {stack} cardUrl={(cardId) => client.cardUrl(boardId, cardId)} />
+    <Stack
+      {stack}
+      cardUrl={(cardId) => client.cardUrl(boardId, cardId)}
+      {onDrop}
+    />
   {/each}
 </div>
+
+<DragPreview />
 
 <style>
   .board {

@@ -85,8 +85,58 @@ export class DeckClient {
     return { ...r, data: stacks };
   }
 
+  // Move / reorder a card.
+  //
+  // M0.2 THE TRAP: `stackId` comes from the URL PATH, not the body.
+  // CardApiController::update() reads it via request->getParam(), and the path
+  // parameter wins. Sending the target stack only in the body returns HTTP 200
+  // with the card UNMOVED - a silent no-op that looks like success.
+  //
+  // M0.2/M0.3: this endpoint (not /cards/{id}/reorder) is the right one. It is
+  // ~5x faster (1.2s vs 6.5s on a 40-card stack, because reorder() rewrites
+  // every card in the stack), it is the only CORS-enabled path, and it rebinds
+  // labels correctly on cross-board moves.
+  //
+  // Read-modify-write is mandatory: update() overwrites title/type/owner/
+  // description, so current values must be resent or they are destroyed.
+  async moveCard({ card, toBoardId, toStackId, order }) {
+    const body = {
+      title: card.title,
+      type: card.type ?? 'plain',
+      owner: typeof card.owner === 'object' ? card.owner.uid : card.owner,
+      description: card.description ?? '',
+      order,
+    };
+    if (card.duedate) body.duedate = card.duedate;
+
+    const res = await fetch(
+      `${this.#base}${API}/boards/${toBoardId}/stacks/${toStackId}/cards/${card.id}`,
+      {
+        method: 'PUT',
+        headers: {
+          Authorization: this.#auth,
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+      }
+    );
+    if (!res.ok) throw new DeckError(res.status, await res.text().catch(() => ''));
+    return res.json();
+  }
+
   // Deep-link into Deck's own UI for anything out of scope (PLAN.md §2.3).
   cardUrl(boardId, cardId) {
     return `${this.#base}/index.php/apps/deck/board/${boardId}/card/${cardId}`;
   }
 }
+
+// Sparse ordering (M0.4). Deck's update() does NOT reindex the target stack -
+// it writes exactly the `order` given. That is what makes it fast, but it means
+// ordering is the client's job. Measured: six parallel moves all sending
+// order:0 produced six cards sharing order=0, rendering arbitrarily.
+//
+// Trello's model: space wide, bisect on insert, re-space when a gap runs out.
+// Ordering is assigned in store.svelte.js, which also knows which neighbours a
+// re-space made dirty and therefore have to be persisted too.
+export const ORDER_STEP = 65536;

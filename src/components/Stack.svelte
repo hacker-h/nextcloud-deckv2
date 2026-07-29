@@ -1,18 +1,38 @@
 <script>
   import Card from './Card.svelte';
-  let { stack, cardUrl } = $props();
+  import { drag } from '../lib/dnd.svelte.js';
+
+  let { stack, cardUrl, onDrop } = $props();
+
+  const isOver = $derived(drag.active && drag.overStack === stack.id);
+  // Cards being dragged are hidden from the layout so the placeholder occupies
+  // their space instead - otherwise the list visibly grows during a drag.
+  const visible = $derived(
+    drag.active ? stack.cards.filter((c) => !drag.cardIds.includes(c.id)) : stack.cards
+  );
+  const placeholderAt = $derived(isOver ? (drag.overIndex ?? visible.length) : -1);
+  // Verified on trello.com: the placeholder is always exactly the height of the
+  // SOURCE card being dragged - a short card yields a short slot, a tall card a
+  // tall one - regardless of how many cards are in the selection.
+  const placeholderH = $derived(drag.h || 36);
 </script>
 
-<section class="stack">
+<section class="stack" class:over={isOver} data-stack-id={stack.id}>
   <header class="head">
     <h2 class="title">{stack.title}</h2>
     <span class="count">{stack.cards.length}</span>
   </header>
 
-  <div class="cards">
-    {#each stack.cards as card (card.id)}
-      <Card {card} href={cardUrl(card.id)} />
+  <div class="cards" data-cards>
+    {#each visible as card, i (card.id)}
+      {#if i === placeholderAt}
+        <div class="placeholder" style="height:{placeholderH}px"></div>
+      {/if}
+      <Card {card} href={cardUrl(card.id)} {onDrop} />
     {/each}
+    {#if placeholderAt >= visible.length}
+      <div class="placeholder" style="height:{placeholderH}px"></div>
+    {/if}
   </div>
 
   <!-- Trello shows this footer on every list. Card creation lands in M6;
@@ -36,9 +56,14 @@
     max-height: 100%;
     background: var(--stack-bg);
     border-radius: var(--stack-radius);
+    /* The whole list is a drop target, so dropping anywhere below the last card
+       lands in this lane. */
+    transition: background 120ms ease;
     /* Trello: list padding 0 0 4px */
     padding-bottom: 4px;
   }
+
+  .stack.over { background: #1B1E12; }
 
   /* Trello: header padding 8px 8px 0, total height 40px */
   .head {
@@ -86,6 +111,18 @@
   }
   .add:hover:not(:disabled) { background: #A1BDD914; color: var(--text); }
   .add:disabled { opacity: .55; cursor: default; }
+
+  /* The drop indicator. Trello shows a recessed slot that the cards animate
+     around; the 120ms ease is what makes it feel deliberate rather than jumpy. */
+  .placeholder {
+    flex: 0 0 auto;
+    background: #A1BDD914;
+    border-radius: var(--card-radius);
+    animation: grow 120ms ease;
+  }
+  @keyframes grow {
+    from { height: 0; opacity: 0; }
+  }
 
   .cards {
     display: flex;

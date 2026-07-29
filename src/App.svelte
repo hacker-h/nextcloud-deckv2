@@ -1,5 +1,6 @@
 <script>
   import { DeckClient } from './lib/deck.js';
+  import { createBoardStore } from './lib/store.svelte.js';
   import { touch, sortByMru } from './lib/mru.js';
   import Board from './components/Board.svelte';
   import BoardSwitcher from './components/BoardSwitcher.svelte';
@@ -10,17 +11,14 @@
     password: import.meta.env.VITE_NC_PASS,
   });
 
+  const board = createBoardStore(client);
+
   let boards = $state([]);
   let current = $state(null);
-  let stacks = $state([]);
-  let loading = $state(true);
-  let error = $state(null);
 
-  // ETag cache per board, so revisiting a board issues a conditional request
-  // and the server answers 304 with no payload (M0.4: 0.14s, zero bytes).
-  const etags = new Map();
-  const cache = new Map();
-
+  const stacks = $derived(board.state.stacks);
+  const loading = $derived(board.state.loading);
+  const error = $derived(board.state.error);
   const cardCount = $derived(stacks.reduce((n, s) => n + s.cards.length, 0));
 
   async function loadBoards() {
@@ -29,39 +27,24 @@
     return boards;
   }
 
-  async function openBoard(board) {
-    if (!board) return;
-    current = board;
-    touch(board.id);
-    loading = true;
-    error = null;
+  async function openBoard(b) {
+    if (!b) return;
+    current = b;
+    touch(b.id);
+    await board.load(b.id);
+  }
 
-    try {
-      const res = await client.getStacks(board.id, etags.get(board.id));
-      if (res.notModified) {
-        stacks = cache.get(board.id) ?? [];
-      } else {
-        stacks = res.data;
-        cache.set(board.id, res.data);
-        if (res.etag) etags.set(board.id, res.etag);
-      }
-    } catch (e) {
-      error = e.message;
-      stacks = [];
-    } finally {
-      loading = false;
-    }
+  function handleDrop({ cardIds, toStackId, index }) {
+    board.moveCards({ cardIds, toStackId, index, boardId: current.id });
   }
 
   async function init() {
-    loading = true;
-    error = null;
     try {
       const list = await loadBoards();
       await openBoard(list[0]);
     } catch (e) {
-      error = e.message;
-      loading = false;
+      board.state.error = e.message;
+      board.state.loading = false;
     }
   }
 
@@ -79,6 +62,11 @@
       <BoardSwitcher {boards} {current} onselect={openBoard} />
       {#if !loading && !error}
         <span class="stat">{stacks.length} lists · {cardCount} cards</span>
+      {/if}
+      {#if board.state.pending > 0}
+        <span class="pending" title="Saving to Deck">
+          {board.state.pending} saving…
+        </span>
       {/if}
     </header>
 
@@ -102,9 +90,13 @@
         {/each}
       </div>
     {:else}
-      <Board {stacks} boardId={current?.id} {client} />
+      <Board {stacks} boardId={current?.id} {client} onDrop={handleDrop} />
     {/if}
   </div>
+
+  {#if board.state.toast}
+    <div class="toast">{board.state.toast.text}</div>
+  {/if}
 </div>
 
 <style>
@@ -115,8 +107,9 @@
     display: flex;
     justify-content: center;
     padding-top: 14px;
-    background: var(--stack-bg);
-    border-right: 1px solid var(--border);
+    background: rgba(0, 0, 0, .26);
+    backdrop-filter: blur(6px);
+    border-right: 1px solid rgba(255, 255, 255, .09);
   }
   .rail-icon { color: var(--text-dim); font-size: 18px; }
 
@@ -129,10 +122,29 @@
     height: var(--topbar-h);
     flex: 0 0 var(--topbar-h);
     padding: 0 12px;
-    background: var(--topbar-bg);
-    border-bottom: 1px solid var(--border);
+    background: rgba(0, 0, 0, .26);
+    backdrop-filter: blur(6px);
+    border-bottom: 1px solid rgba(255, 255, 255, .09);
   }
   .stat { font-size: 12px; color: var(--text-dim); }
+  .pending { font-size: 12px; color: var(--accent); }
+
+  /* Failures surface here rather than blocking the board (PLAN.md §4.1). */
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2000;
+    max-width: 520px;
+    padding: 10px 16px;
+    background: #5D1F1A;
+    border: 1px solid #A5342B;
+    border-radius: 8px;
+    color: #FFD5D2;
+    font-size: 13px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
+  }
 
   .state { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding: 24px; }
   .err { margin: 0; color: var(--danger); }

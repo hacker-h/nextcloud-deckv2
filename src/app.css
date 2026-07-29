@@ -13,7 +13,13 @@
   --rail-w: 44px;
 
   /* Trello --ds-* dark tokens */
-  --bg: #1D2125;            /* board canvas, dark theme */
+  --bg: #1D2125;            /* board canvas fallback */
+  /* Trello renders a photo/gradient backdrop behind the lists. Deck only gives
+     boards a flat colour, so we generate a gradient in the same spirit. */
+  --board-gradient:
+    radial-gradient(1200px 800px at 12% -10%, #4B2A6B 0%, transparent 55%),
+    radial-gradient(1000px 700px at 88% 8%, #6B2F63 0%, transparent 50%),
+    linear-gradient(160deg, #3B2154 0%, #6E3568 48%, #8E4A7C 100%);
   --stack-bg: #101204;      /* Trello list background, dark theme */
   --card-bg: #242528;       /* --ds-surface-raised */
   --card-bg-hover: #2C2D31; /* raised + neutral overlay */
@@ -39,6 +45,8 @@ html, body, #app {
 
 body {
   background: var(--bg);
+  background-image: var(--board-gradient);
+  background-attachment: fixed;
   color: var(--text);
   /* Trello's stack, minus the proprietary Atlassian Sans */
   font-family: ui-sans-serif, -apple-system, system-ui, 'Segoe UI', Ubuntu,
