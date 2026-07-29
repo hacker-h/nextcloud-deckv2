@@ -1,7 +1,7 @@
 <script>
   import { draggable } from '../lib/dnd.svelte.js';
 
-  let { card, href, onDrop } = $props();
+  let { card, onDrop } = $props();
 
   const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const due = $derived.by(() => {
@@ -15,11 +15,8 @@
   const hasMeta = $derived(due || hasDesc || card.commentsCount > 0 || card.attachmentCount > 0);
 </script>
 
-<a
+<div
   class="card"
-  {href}
-  target="_blank"
-  rel="noopener noreferrer"
   data-card-id={card.id}
   use:draggable={() => ({ card, onDrop })}
 >
@@ -73,7 +70,7 @@
       </div>
     {/if}
   </div>
-</a>
+</div>
 
 <style>
   .card {
@@ -86,7 +83,6 @@
     border-radius: var(--card-radius);
     box-shadow: var(--card-shadow);
     color: var(--text);
-    text-decoration: none;
     /* The whole tile becomes the drag handle in M4; text must never be
        selectable by dragging across it (PLAN.md §2.2). */
     user-select: none;

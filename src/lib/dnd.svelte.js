@@ -46,6 +46,53 @@ export function insertionIndex(stackEl, clientY, draggingIds) {
   return cards.length;
 }
 
+// Edge auto-scroll. Without it any lane outside the viewport is simply
+// unreachable by dragging - on the test board 6 of 10 lanes were off-screen.
+// Trello scrolls the board horizontally and the hovered list vertically once
+// the pointer comes within a margin of an edge, accelerating as it gets closer.
+const EDGE = 64;        // px from an edge where scrolling kicks in
+const MAX_SPEED = 18;   // px per frame at the very edge
+
+let raf = 0;
+
+function edgeVelocity(pos, min, max) {
+  if (pos < min + EDGE) return -MAX_SPEED * Math.min(1, (min + EDGE - pos) / EDGE);
+  if (pos > max - EDGE) return MAX_SPEED * Math.min(1, (pos - (max - EDGE)) / EDGE);
+  return 0;
+}
+
+function scrollTick() {
+  if (!drag.active) { raf = 0; return; }
+
+  const board = document.querySelector('[data-board]');
+  if (board) {
+    const r = board.getBoundingClientRect();
+    const vx = edgeVelocity(drag.x, r.left, r.right);
+    if (vx) board.scrollLeft += vx;
+  }
+
+  // Vertical scrolling applies to the list under the cursor, not the board.
+  const list = document
+    .elementsFromPoint(drag.x, drag.y)
+    .find((el) => el.hasAttribute?.('data-cards'));
+  if (list && list.scrollHeight > list.clientHeight) {
+    const r = list.getBoundingClientRect();
+    const vy = edgeVelocity(drag.y, r.top, r.bottom);
+    if (vy) list.scrollTop += vy;
+  }
+
+  raf = requestAnimationFrame(scrollTick);
+}
+
+function startAutoScroll() {
+  if (!raf) raf = requestAnimationFrame(scrollTick);
+}
+
+function stopAutoScroll() {
+  if (raf) cancelAnimationFrame(raf);
+  raf = 0;
+}
+
 // The in-flight gesture. Module scope on purpose: as soon as a drag starts the
 // source card is filtered out of its stack, so Svelte destroys its component. If
 // the pointermove/pointerup listeners lived on that node they would be torn
@@ -69,6 +116,7 @@ function onMove(e) {
     drag.grabX = g.grabX;
     drag.grabY = g.grabY;
     document.body.style.cursor = 'grabbing';
+    startAutoScroll();
   }
 
   drag.x = e.clientX;
@@ -99,6 +147,7 @@ function onUp() {
   window.removeEventListener('pointerup', onUp);
   window.removeEventListener('pointercancel', onUp);
   document.body.style.cursor = '';
+  stopAutoScroll();
 
   if (!gesture.moved) { resetDrag(); return; }
 

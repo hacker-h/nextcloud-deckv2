@@ -22,6 +22,10 @@ export class DeckError extends Error {
 }
 
 const isLive = (x) => !x.archived && Number(x.deletedAt ?? 0) === 0;
+// Boards shared with us read-only. Every mutation against them returns 403, so
+// offering them as a drag target or in the switcher only produces errors
+// (verified: board 109 "Antonia Aufgaben", owned by another user).
+const canEdit = (b) => Boolean((b.permissions ?? {}).PERMISSION_EDIT);
 const byOrder = (a, b) => Number(a.order ?? 0) - Number(b.order ?? 0);
 
 export class DeckClient {
@@ -55,7 +59,7 @@ export class DeckClient {
   async getBoards(etag) {
     const r = await this.#get('/boards', etag);
     if (r.notModified) return r;
-    return { ...r, data: r.data.filter(isLive) };
+    return { ...r, data: r.data.filter((b) => isLive(b) && canEdit(b)) };
   }
 
   // Returns stacks sorted by `order`, each with its cards sorted by `order`.

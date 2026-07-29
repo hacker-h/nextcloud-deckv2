@@ -5,13 +5,9 @@
   let { stacks, boardId, client, onDrop } = $props();
 </script>
 
-<div class="board">
+<div class="board" data-board>
   {#each stacks as stack (stack.id)}
-    <Stack
-      {stack}
-      cardUrl={(cardId) => client.cardUrl(boardId, cardId)}
-      {onDrop}
-    />
+    <Stack {stack} {onDrop} />
   {/each}
 </div>
 

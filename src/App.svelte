@@ -27,6 +27,10 @@
     return boards;
   }
 
+  // Development points at a dedicated throwaway board so a bad drag can never
+  // scramble real data. Set VITE_BOARD_ID to override.
+  const preferredBoardId = Number(import.meta.env.VITE_BOARD_ID) || null;
+
   async function openBoard(b) {
     if (!b) return;
     current = b;
@@ -41,7 +45,8 @@
   async function init() {
     try {
       const list = await loadBoards();
-      await openBoard(list[0]);
+      const preferred = list.find((b) => b.id === preferredBoardId);
+      await openBoard(preferred ?? list[0]);
     } catch (e) {
       board.state.error = e.message;
       board.state.loading = false;
