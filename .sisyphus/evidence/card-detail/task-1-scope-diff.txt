@@ -1,0 +1,98 @@
+# Docs diff
+diff --git a/.sisyphus/PLAN.md b/.sisyphus/PLAN.md
+index 1182456..65dda47 100644
+--- a/.sisyphus/PLAN.md
++++ b/.sisyphus/PLAN.md
+@@ -58,17 +58,20 @@ every commit, in local history and on the GitHub remote.
+ - **MRU board switcher** — dropdown sorted by last used, with search (§8).
+ - **Move history** with grouping, plus undo/redo (§9).
+ - Create cards (title-only, inline) and rename cards (inline).
+-- Deep-link to Deck for anything out of scope.
++- **Card detail in Deck v2**: plain click and Enter/Space open the in-app detail;
++  native Deck deep-links are forbidden.
+ - `user-select: none` on all tiles; the whole tile is the drag handle.
+ - **Agent-usable**: the same functions the UI calls are exposed to AI agents (§10).
+ 
+ ### 2.3 Explicitly out of scope
+ 
+-Card detail view, descriptions, comments, attachments, checklists, labels,
+-assignees, due dates, time tracking, board/stack administration, sharing, search,
+-filters, archive, and all realtime-collaboration/presence features.
++Checklists, time tracking, board/stack administration, sharing, search, filters, and
++all realtime-collaboration/presence features.
+ 
+-For all of these: deep-link into Deck. If in doubt, ask rather than build.
++Card detail is first-class in this SPA: title, description, due date, labels,
++assignees, comments, attachments, archive/unarchive, and guarded soft-delete are in
++scope. Native Deck card deep-links are forbidden; if a detail feature is missing,
++show an in-app incomplete state rather than escaping to Deck's own UI.
+ 
+ ### 2.4 Architectural constraints (fixed, not up for debate)
+ 
+@@ -305,7 +308,7 @@ Stop after each milestone and demo.
+ | **M4** | Drag of a multi-card selection | M3 |
+ | **M4.5** | Inbox panel + MRU board switcher | M4 |
+ | **M5** | History panel with grouping + undo/redo | M2 |
+-| **M6** | Card create/rename, deep-links | M2 |
++| **M6** | Card create/rename; in-app card detail follow-ups | M2 |
+ | **M7** | Agent surface (CLI/MCP over `core/ops`) | M3 |
+ | **M8** | PWA, IndexedDB cache, offline queue | M4 |
+ 
+@@ -347,8 +350,16 @@ Shift+click therefore serves double duty — **range-extend** on unselected card
+ **toggle-off** on selected ones. That single rule is why no second modifier exists.
+ 
+ - **Plain click must not reset the selection.** In Trello a plain click opens the
+-  card detail. For us: plain click on a card opens the Deck deep-link; plain click
+-  on empty space clears.
++  card detail. For us: plain click on a card opens the in-app Deck v2 card detail;
++  plain click on empty space clears.
++- **Shift-click is selection only.** It range-extends/toggles selection and never
++  opens detail.
++- **Enter/Space activate detail.** Keyboard activation on a focused card opens the
++  same in-app detail as a genuine plain click.
++- **Drag never activates.** Pointer movement that crosses the drag threshold,
++  pointer cancellation, and failed drops must not open detail.
++- **Native Deck deep-links are forbidden.** No `apps/deck/board/.../card/...` URL is
++  an activation fallback or escape hatch.
+ - Selected cards get a saturated outline (Trello: `2px rgb(0,95,204)`) plus a
+   contrasting background.
+ - A counter shows the number of selected cards.
+diff --git a/.sisyphus/TRELLO-UX-SPEC.md b/.sisyphus/TRELLO-UX-SPEC.md
+index 77b9d02..032bad0 100644
+--- a/.sisyphus/TRELLO-UX-SPEC.md
++++ b/.sisyphus/TRELLO-UX-SPEC.md
+@@ -16,7 +16,7 @@ modifier before the page sees it.
+ 
+ | Action | Result |
+ |---|---|
+-| Plain click on card | **Opens the card detail** (URL → `/c/<id>/...`). Does *not* select. |
++| Plain click on card | **Opens the card detail** (Trello URL → `/c/<id>/...`; Deck v2 opens in-app detail). Does *not* select. |
+ | Shift+click on unselected card, nothing selected | Selects it, becomes anchor |
+ | Shift+click on another card in the **same** list | Selects the **whole range** anchor→target |
+ | Shift+click *backwards* past the anchor | **Unions** — keeps the old range and adds the new one. Does *not* replace. |
+@@ -45,8 +45,14 @@ The plan's §6 was wrong on two counts and must be updated:
+   browser it cannot work reliably. Shift+click on a selected card is the toggle.
+ - Plain click must **not** replace the selection with that one card. In Trello plain
+   click opens the card. For us the equivalent is: plain click on empty space clears;
+-  plain click on a card should open the Deck deep-link (or do nothing), never
+-  silently reset a selection the user just built.
++  plain click on a card opens the in-app Deck v2 card detail, never silently resets a
++  selection the user just built.
++- Shift-click is selection only: it range-extends or toggles and never opens detail.
++- Enter/Space on a focused card activates the same in-app detail as plain click.
++- Drag never activates detail; once pointer movement crosses the drag threshold (or
++  pointer cancellation/drop failure occurs), the gesture remains drag-only.
++- Native Deck card deep-links are forbidden. The SPA must not render or navigate to
++  `apps/deck/board/.../card/...` as a fallback.
+ 
+ ---
+ 
+
+# Removed helper diff
+5:@@ -5,20 +5,40 @@
+53:@@ -37,27 +57,73 @@ export class DeckClient {
+138:@@ -74,7 +140,7 @@ export class DeckClient {
+147:@@ -113,26 +179,32 @@ export class DeckClient {
+173:-  // Deep-link into Deck's own UI for anything out of scope (PLAN.md §2.3).
+174:-  cardUrl(boardId, cardId) {
+175:-    return `${this.#base}/index.php/apps/deck/board/${boardId}/card/${cardId}`;

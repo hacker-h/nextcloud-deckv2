@@ -1,0 +1,10 @@
+# Before edit (HEAD)
+HEAD:src/lib/deck.js:133:  cardUrl(boardId, cardId) {
+HEAD:src/lib/deck.js:134:    return `${this.#base}/index.php/apps/deck/board/${boardId}/card/${cardId}`;
+
+# After edit (working tree)
+
+# Spec requirement search
+.sisyphus/PLAN.md:62:  native Deck deep-links are forbidden.
+.sisyphus/PLAN.md:361:- **Native Deck deep-links are forbidden.** No `apps/deck/board/.../card/...` URL is
+.sisyphus/TRELLO-UX-SPEC.md:55:  `apps/deck/board/.../card/...` as a fallback.

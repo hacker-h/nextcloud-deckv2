@@ -58,17 +58,20 @@ every commit, in local history and on the GitHub remote.
 - **MRU board switcher** — dropdown sorted by last used, with search (§8).
 - **Move history** with grouping, plus undo/redo (§9).
 - Create cards (title-only, inline) and rename cards (inline).
-- Deep-link to Deck for anything out of scope.
+- **Card detail in Deck v2**: plain click and Enter/Space open the in-app detail;
+  native Deck deep-links are forbidden.
 - `user-select: none` on all tiles; the whole tile is the drag handle.
 - **Agent-usable**: the same functions the UI calls are exposed to AI agents (§10).
 
 ### 2.3 Explicitly out of scope
 
-Card detail view, descriptions, comments, attachments, checklists, labels,
-assignees, due dates, time tracking, board/stack administration, sharing, search,
-filters, archive, and all realtime-collaboration/presence features.
+Checklists, time tracking, board/stack administration, sharing, search, filters, and
+all realtime-collaboration/presence features.
 
-For all of these: deep-link into Deck. If in doubt, ask rather than build.
+Card detail is first-class in this SPA: title, description, due date, labels,
+assignees, comments, attachments, archive/unarchive, and guarded soft-delete are in
+scope. Native Deck card deep-links are forbidden; if a detail feature is missing,
+show an in-app incomplete state rather than escaping to Deck's own UI.
 
 ### 2.4 Architectural constraints (fixed, not up for debate)
 
@@ -305,7 +308,7 @@ Stop after each milestone and demo.
 | **M4** | Drag of a multi-card selection | M3 |
 | **M4.5** | Inbox panel + MRU board switcher | M4 |
 | **M5** | History panel with grouping + undo/redo | M2 |
-| **M6** | Card create/rename, deep-links | M2 |
+| **M6** | Card create/rename; in-app card detail follow-ups | M2 |
 | **M7** | Agent surface (CLI/MCP over `core/ops`) | M3 |
 | **M8** | PWA, IndexedDB cache, offline queue | M4 |
 
@@ -347,8 +350,16 @@ Shift+click therefore serves double duty — **range-extend** on unselected card
 **toggle-off** on selected ones. That single rule is why no second modifier exists.
 
 - **Plain click must not reset the selection.** In Trello a plain click opens the
-  card detail. For us: plain click on a card opens the Deck deep-link; plain click
-  on empty space clears.
+  card detail. For us: plain click on a card opens the in-app Deck v2 card detail;
+  plain click on empty space clears.
+- **Shift-click is selection only.** It range-extends/toggles selection and never
+  opens detail.
+- **Enter/Space activate detail.** Keyboard activation on a focused card opens the
+  same in-app detail as a genuine plain click.
+- **Drag never activates.** Pointer movement that crosses the drag threshold,
+  pointer cancellation, and failed drops must not open detail.
+- **Native Deck deep-links are forbidden.** No `apps/deck/board/.../card/...` URL is
+  an activation fallback or escape hatch.
 - Selected cards get a saturated outline (Trello: `2px rgb(0,95,204)`) plus a
   contrasting background.
 - A counter shows the number of selected cards.

@@ -16,7 +16,7 @@ modifier before the page sees it.
 
 | Action | Result |
 |---|---|
-| Plain click on card | **Opens the card detail** (URL → `/c/<id>/...`). Does *not* select. |
+| Plain click on card | **Opens the card detail** (Trello URL → `/c/<id>/...`; Deck v2 opens in-app detail). Does *not* select. |
 | Shift+click on unselected card, nothing selected | Selects it, becomes anchor |
 | Shift+click on another card in the **same** list | Selects the **whole range** anchor→target |
 | Shift+click *backwards* past the anchor | **Unions** — keeps the old range and adds the new one. Does *not* replace. |
@@ -45,8 +45,14 @@ The plan's §6 was wrong on two counts and must be updated:
   browser it cannot work reliably. Shift+click on a selected card is the toggle.
 - Plain click must **not** replace the selection with that one card. In Trello plain
   click opens the card. For us the equivalent is: plain click on empty space clears;
-  plain click on a card should open the Deck deep-link (or do nothing), never
-  silently reset a selection the user just built.
+  plain click on a card opens the in-app Deck v2 card detail, never silently resets a
+  selection the user just built.
+- Shift-click is selection only: it range-extends or toggles and never opens detail.
+- Enter/Space on a focused card activates the same in-app detail as plain click.
+- Drag never activates detail; once pointer movement crosses the drag threshold (or
+  pointer cancellation/drop failure occurs), the gesture remains drag-only.
+- Native Deck card deep-links are forbidden. The SPA must not render or navigate to
+  `apps/deck/board/.../card/...` as a fallback.
 
 ---
 
