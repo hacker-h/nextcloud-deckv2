@@ -32,18 +32,48 @@ export function resetDrag() {
   drag.overIndex = null;
 }
 
+// How far past a card's midpoint the pointer must travel before the placeholder
+// commits to a new slot. A pointer resting on a midpoint otherwise flips the
+// slot on every sub-pixel tremor and the list flickers. Deliberately a spatial
+// deadband rather than a time delay: a timer would add lag to every legitimate
+// move, while this costs nothing unless the pointer sits on a boundary.
+export const HYSTERESIS = 8;
+
 // Returns the insertion index for a pointer position within a stack element,
 // using each card's vertical midpoint. Cards being dragged are skipped so the
-// placeholder does not fight with the source gap.
-export function insertionIndex(stackEl, clientY, draggingIds) {
+// placeholder does not fight with the source gap. While `committed` is held, a
+// boundary must be cleared by `margin` px before a different slot wins.
+export function insertionIndex(stackEl, clientY, draggingIds, committed = null, margin = 0) {
   const cards = [...stackEl.querySelectorAll('[data-card-id]')].filter(
     (el) => !draggingIds.includes(Number(el.dataset.cardId))
   );
+
   for (let i = 0; i < cards.length; i++) {
     const r = cards[i].getBoundingClientRect();
-    if (clientY < r.top + r.height / 2) return i;
+    const mid = r.top + r.height / 2;
+    // Moving up into slot i must undershoot the midpoint; moving down out of it
+    // must overshoot. Biasing the boundary away from the committed slot is what
+    // makes the placeholder stick instead of oscillate.
+    const bias = committed == null ? 0 : i < committed ? -margin : margin;
+    if (clientY < mid + bias) return i;
   }
   return cards.length;
+}
+
+// Resolves a pointer position to a lane. elementsFromPoint alone is not enough:
+// lanes are sized to their content (align-items:flex-start), so below a short
+// list there is literally no element to hit and the drop was silently dropped.
+// Fall back to a horizontal band test against each lane, which is what makes
+// the empty space under a short list a valid target.
+export function stackFromPoint(x, y) {
+  const hit = document.elementsFromPoint(x, y).find((el) => el.dataset?.stackId);
+  if (hit) return hit;
+
+  for (const el of document.querySelectorAll('[data-stack-id]')) {
+    const r = el.getBoundingClientRect();
+    if (x >= r.left && x <= r.right && y >= r.top) return el;
+  }
+  return null;
 }
 
 // Edge auto-scroll. Without it any lane outside the viewport is simply
@@ -161,14 +191,16 @@ function onMove(e) {
 
   // Hit-test stacks. elementsFromPoint sees through the preview because the
   // preview is pointer-events:none.
-  const stackEl = document
-    .elementsFromPoint(e.clientX, e.clientY)
-    .find((el) => el.dataset?.stackId);
+  const stackEl = stackFromPoint(e.clientX, e.clientY);
 
   if (stackEl) {
-    drag.overStack = Number(stackEl.dataset.stackId);
+    const stackId = Number(stackEl.dataset.stackId);
     const list = stackEl.querySelector('[data-cards]') ?? stackEl;
-    drag.overIndex = insertionIndex(list, e.clientY, drag.cardIds);
+    // Only hold the previous slot while staying in the same lane; crossing into
+    // another lane should snap immediately.
+    const committed = drag.overStack === stackId ? drag.overIndex : null;
+    drag.overStack = stackId;
+    drag.overIndex = insertionIndex(list, e.clientY, drag.cardIds, committed, HYSTERESIS);
   } else {
     drag.overStack = null;
     drag.overIndex = null;

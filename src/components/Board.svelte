@@ -25,8 +25,7 @@
     overflow-x: auto;
     overflow-y: hidden;
   }
-  /* Stacks size to content but never exceed the viewport; each scrolls
-     internally past that. Full-height stacks would leave large empty wells
-     under short lists. */
-  .board > :global(.stack) { max-height: 100%; }
+  /* Lanes run the full height so the empty space under a short list is still
+     that lane's drop target; each scrolls internally once its cards overflow. */
+  .board > :global(.stack) { height: 100%; max-height: 100%; }
 </style>
