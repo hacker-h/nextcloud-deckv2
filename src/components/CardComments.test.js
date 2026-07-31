@@ -132,6 +132,28 @@ describe('CardComments', () => {
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
+  it('keeps the edit open with the typed text when an edit fails', async () => {
+    const onEdit = vi.fn().mockRejectedValue(new Error('edit rejected by server'));
+    setup({ comments: [comment(1, { message: 'Original' })], onEdit });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    await type('Edit comment', 'Rewritten');
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(screen.getByLabelText('Edit comment')).toHaveValue('Rewritten');
+    expect(screen.getByRole('alert')).toHaveTextContent('edit rejected by server');
+  });
+
+  it('keeps the comment listed and reports the error when a delete fails', async () => {
+    const onDelete = vi.fn().mockRejectedValue(new Error('delete rejected by server'));
+    setup({ comments: [comment(1, { message: 'Still here' })], onDelete });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(screen.getByText('Still here')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('delete rejected by server');
+  });
+
   it('retries the exact failed payload without duplicating it', async () => {
     const onAdd = vi
       .fn()

@@ -106,6 +106,40 @@ describe('CardAttachments', () => {
     expect(onRestore).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
   });
 
+  it('keeps the rename open with the typed name when the rename fails', async () => {
+    const onRename = vi.fn().mockRejectedValue(new Error('rename rejected by server'));
+    setup({ attachments: [attachment(1)], onRename });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
+    await fireEvent.input(screen.getByLabelText('Attachment name'), {
+      target: { value: 'detail-renamed.txt' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(screen.getByLabelText('Attachment name')).toHaveValue('detail-renamed.txt');
+    expect(screen.getByRole('alert')).toHaveTextContent('rename rejected by server');
+  });
+
+  it('keeps the attachment listed and reports the error when a delete fails', async () => {
+    const onDelete = vi.fn().mockRejectedValue(new Error('delete rejected by server'));
+    setup({ attachments: [attachment(1)], onDelete });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+
+    expect(screen.getByText('detail-test.txt')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('delete rejected by server');
+  });
+
+  it('keeps the attachment deleted and reports the error when a restore fails', async () => {
+    const onRestore = vi.fn().mockRejectedValue(new Error('restore rejected by server'));
+    setup({ attachments: [attachment(1, { deletedAt: 1767610000 })], onRestore });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+
+    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('restore rejected by server');
+  });
+
   it('downloads through the authenticated handler rather than a raw link', async () => {
     const { onDownload } = setup({ attachments: [attachment(1)] });
 
