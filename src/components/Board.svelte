@@ -2,12 +2,12 @@
   import Stack from './Stack.svelte';
   import DragPreview from './DragPreview.svelte';
 
-  let { stacks, boardId, client, onDrop } = $props();
+  let { stacks, boardId, client, onDrop, onOpenCard } = $props();
 </script>
 
 <div class="board" data-board>
   {#each stacks as stack (stack.id)}
-    <Stack {stack} {onDrop} />
+    <Stack {stack} {onDrop} {onOpenCard} />
   {/each}
 </div>
 

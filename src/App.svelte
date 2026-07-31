@@ -1,9 +1,17 @@
 <script>
   import { DeckClient } from './lib/deck.js';
   import { createBoardStore } from './lib/store.svelte.js';
+  import { createCardDetailStore } from './lib/detail.svelte.js';
+  import { getBoardAssignmentOptions } from './lib/assignments.js';
+  import { downloadAttachment } from './lib/attachments.js';
   import { touch, sortByMru } from './lib/mru.js';
   import Board from './components/Board.svelte';
   import BoardSwitcher from './components/BoardSwitcher.svelte';
+  import CardDetailModal from './components/CardDetailModal.svelte';
+  import CardCoreEditor from './components/CardCoreEditor.svelte';
+  import CardMetadataEditor from './components/CardMetadataEditor.svelte';
+  import CardComments from './components/CardComments.svelte';
+  import CardAttachments from './components/CardAttachments.svelte';
 
   const client = new DeckClient({
     baseUrl: import.meta.env.VITE_NC_URL,
@@ -13,8 +21,16 @@
 
   const board = createBoardStore(client);
 
+  // Detail saves must repaint the board tile, so the store pushes every fresh
+  // card straight back into the board state.
+  const detail = createCardDetailStore(client, {
+    currentUser: import.meta.env.VITE_NC_USER,
+    onCard: (card) => board.replaceCard?.(card),
+  });
+
   let boards = $state([]);
   let current = $state(null);
+  let assignmentOptions = $state({ labels: [], participants: [] });
 
   const stacks = $derived(board.state.stacks);
   const loading = $derived(board.state.loading);
@@ -36,10 +52,42 @@
     current = b;
     touch(b.id);
     await board.load(b.id);
+    loadAssignmentOptions(b.id);
   }
 
   function handleDrop({ cardIds, toStackId, index }) {
     board.moveCards({ cardIds, toStackId, index, boardId: current.id });
+  }
+
+  function handleOpenCard({ card }) {
+    detail.open({ boardId: current.id, stackId: card.stackId, cardId: card.id });
+  }
+
+  async function loadAssignmentOptions(boardId) {
+    try {
+      const { data } = await getBoardAssignmentOptions(client, boardId);
+      assignmentOptions = data;
+    } catch {
+      // Pickers degrade to empty lists; the rest of the detail view still works.
+      assignmentOptions = { labels: [], participants: [] };
+    }
+  }
+
+  // Deck has no rename verb: the file is re-PUT under the new name, so the
+  // existing bytes must be fetched first or the content would be truncated.
+  async function handleRename(attachment, name) {
+    const blob = await downloadAttachment(client, detail.state.cardId, attachment.id);
+    await detail.replaceAttachment(attachment.id, new File([blob], name, { type: attachment.mimetype ?? blob.type }));
+  }
+
+  async function handleDownload(attachment) {
+    const blob = await downloadAttachment(client, detail.state.cardId, attachment.id);
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = attachment.name;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function init() {
@@ -95,9 +143,59 @@
         {/each}
       </div>
     {:else}
-      <Board {stacks} boardId={current?.id} {client} onDrop={handleDrop} />
+      <Board {stacks} boardId={current?.id} {client} onDrop={handleDrop} onOpenCard={handleOpenCard} />
     {/if}
   </div>
+
+  {#if detail.state.cardId != null}
+    <CardDetailModal
+      card={detail.state.card}
+      loading={detail.state.loading}
+      error={detail.state.error}
+      dirty={detail.state.dirty}
+      onClose={detail.requestClose}
+      onRetry={detail.refreshCard}
+      onSave={detail.saveCore}
+      onDiscard={detail.discardDraft}
+    >
+      {#snippet main()}
+        <CardCoreEditor
+          card={detail.state.card}
+          error={detail.state.error}
+          onSave={(changes) => {
+            detail.editDraft(changes);
+            return detail.saveCore();
+          }}
+        />
+        <CardComments
+          comments={detail.state.comments}
+          onAdd={detail.addComment}
+          onEdit={detail.editComment}
+          onDelete={detail.removeComment}
+        />
+      {/snippet}
+
+      {#snippet sidebar()}
+        <CardMetadataEditor
+          card={detail.state.card}
+          labels={assignmentOptions.labels}
+          participants={assignmentOptions.participants}
+          onAssignLabel={detail.assignLabel}
+          onRemoveLabel={detail.removeLabel}
+          onAssignUser={detail.assignUser}
+          onUnassignUser={detail.unassignUser}
+        />
+        <CardAttachments
+          attachments={detail.state.attachments}
+          onUpload={detail.addAttachment}
+          onRename={handleRename}
+          onDelete={(attachment) => detail.removeAttachment(attachment.id)}
+          onRestore={(attachment) => detail.restoreDeletedAttachment(attachment.id)}
+          onDownload={handleDownload}
+        />
+      {/snippet}
+    </CardDetailModal>
+  {/if}
 
   {#if board.state.toast}
     <div class="toast">{board.state.toast.text}</div>

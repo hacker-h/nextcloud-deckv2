@@ -1,7 +1,7 @@
 <script>
   import { draggable } from '../lib/dnd.svelte.js';
 
-  let { card, onDrop } = $props();
+  let { card, onDrop, onOpenCard } = $props();
 
   const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const due = $derived.by(() => {
@@ -13,12 +13,24 @@
   const labels = $derived(card.labels ?? []);
   const hasDesc = $derived(Boolean(card.description?.trim()));
   const hasMeta = $derived(due || hasDesc || card.commentsCount > 0 || card.attachmentCount > 0);
+
+  // Keyboard activation bypasses the pointer gesture machine entirely: there is
+  // no drag to disambiguate, so Enter/Space open the card directly.
+  function onKeydown(e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    onOpenCard?.({ card });
+  }
 </script>
 
 <div
   class="card"
+  role="button"
+  tabindex="0"
+  aria-label={card.title}
   data-card-id={card.id}
-  use:draggable={() => ({ card, onDrop })}
+  onkeydown={onKeydown}
+  use:draggable={() => ({ card, onDrop, onActivate: () => onOpenCard?.({ card }) })}
 >
   <div class="inner">
     {#if labels.length}
