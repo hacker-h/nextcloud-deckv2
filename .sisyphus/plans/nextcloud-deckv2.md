@@ -63,15 +63,15 @@ Make card detail a first-class Deck v2 workflow so users can inspect and modify 
 - Automated regression tests and evidence from test board 116.
 
 ### Definition of Done
-- [ ] Plain click opens exactly one modal for the clicked card.
-- [ ] A drag exceeding 5 px opens zero modals before, during, or after drop.
-- [ ] Shift-click opens zero modals.
-- [ ] Enter/Space opens the focused card modal and closing restores focus to that card.
-- [ ] All supported fields round-trip through Deck APIs and update the board tile immediately.
-- [ ] Failed writes preserve prior data and show a specific error.
-- [ ] Comments and attachments work through the SPA origin with exactly one ACAO header.
-- [ ] No `apps/deck/board/.../card/...` links remain in source or rendered DOM.
-- [ ] All Vitest and Playwright tests pass; live mutation evidence references only board 116.
+- [x] Plain click opens exactly one modal for the clicked card.
+- [x] A drag exceeding 5 px opens zero modals before, during, or after drop.
+- [x] Shift-click opens zero modals.
+- [x] Enter/Space opens the focused card modal and closing restores focus to that card.
+- [x] All supported fields round-trip through Deck APIs and update the board tile immediately.
+- [x] Failed writes preserve prior data and show a specific error.
+- [x] Comments and attachments work through the SPA origin with exactly one ACAO header.
+- [x] No `apps/deck/board/.../card/...` links remain in source or rendered DOM.
+- [x] All Vitest and Playwright tests pass; live mutation evidence references only board 116.
 
 ### Must Have
 - Gesture arbitration owned by one state machine, not independent click and drag handlers racing each other.
@@ -1054,21 +1054,21 @@ FINAL — four parallel audits, then explicit user approval
 
 > Run F1–F4 in parallel after all implementation tasks. Every reviewer must approve. Present consolidated results and wait for explicit user approval before completion.
 
-- [ ] F1. **Plan Compliance Audit** — `oracle`
+- [x] F1. **Plan Compliance Audit** — `oracle`
   - Verify every Must Have and Must NOT Have against source, rendered DOM, network traces, and evidence.
   - Confirm no native Deck card links and no mutation evidence outside board 116.
   - Output: `Must Have [N/N] | Must NOT Have [N/N] | Tasks [N/N] | VERDICT`.
 
-- [ ] F2. **Code Quality and Automated-Test Audit** — `unspecified-high`
+- [x] F2. **Code Quality and Automated-Test Audit** — `unspecified-high`
   - Run build, Vitest, Playwright, lint/type diagnostics if configured.
   - Inspect changed files for unsafe full-PUT omissions, duplicated request code, leaked credentials, stale handlers, broad catches, and inaccessible controls.
   - Output: `Build | Unit | Component | E2E | Files reviewed | VERDICT`.
 
-- [ ] F3. **Real Browser QA Replay** — `unspecified-high` + `playwright`
+- [x] F3. **Real Browser QA Replay** — `unspecified-high` + `playwright`
   - Execute every QA scenario on board 116 from a clean state; retain screenshots, traces, request bodies with secrets redacted, and cleanup proof.
   - Output: `Scenarios [N/N] | Cleanup | Evidence | VERDICT`.
 
-- [ ] F4. **Scope and Production-Safety Audit** — `deep`
+- [x] F4. **Scope and Production-Safety Audit** — `deep`
   - Compare implementation diff 1:1 with tasks. Verify production Nextcloud vhost unchanged, alias CORS has one ACAO, ACME route remains, and no non-test board was mutated.
   - Output: `Scope | Production safety | Test-board isolation | VERDICT`.
 
@@ -1098,13 +1098,13 @@ npm run test:e2e              # expected: all Playwright tests pass against boar
 ```
 
 ### Final Checklist
-- [ ] True click opens one modal; drag opens none.
-- [ ] Shift-click remains detail-free and reserved for selection.
-- [ ] Keyboard activation and focus restoration work.
-- [ ] All detail fields round-trip safely.
-- [ ] Failed writes roll back without data loss.
-- [ ] Comments and attachments work cross-origin through the alias.
-- [ ] Archive/delete are guarded and recover cleanly on failure.
-- [ ] Native Deck card links are absent.
-- [ ] Production host/config remains unchanged.
-- [ ] Board 116 is the only live mutation target in evidence.
+- [x] True click opens one modal; drag opens none.
+- [x] Shift-click remains detail-free and reserved for selection.
+- [x] Keyboard activation and focus restoration work.
+- [x] All detail fields round-trip safely.
+- [x] Failed writes roll back without data loss.
+- [x] Comments and attachments work cross-origin through the alias.
+- [x] Archive/delete are guarded and recover cleanly on failure.
+- [x] Native Deck card links are absent.
+- [x] Production host/config remains unchanged.
+- [x] Board 116 is the only live mutation target in evidence.
