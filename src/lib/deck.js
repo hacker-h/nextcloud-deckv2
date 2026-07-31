@@ -5,20 +5,40 @@
 // while doing nothing, so these notes are the only documentation that exists.
 
 const API = '/index.php/apps/deck/api/v1.0';
+const OCS = '/ocs/v2.php';
 
 export class DeckError extends Error {
-  constructor(status, body) {
-    let msg = `Deck API error ${status}`;
-    try {
-      const parsed = JSON.parse(body);
-      if (parsed.message) msg = parsed.message;
-    } catch {
-      // body was not JSON; keep the generic message
-    }
+  constructor(status, body, { method = 'GET', path = '', contentType = '' } = {}) {
+    const parsed = parseErrorBody(body, contentType);
+    const msg = parsed.message || `Deck API error ${status}`;
     super(msg);
     this.name = 'DeckError';
     this.status = status;
+    this.method = method;
+    this.path = path;
+    this.body = parsed.body;
   }
+}
+
+export class DeckAbortError extends Error {
+  constructor(message = 'Deck API request aborted') {
+    super(message);
+    this.name = 'AbortError';
+  }
+}
+
+function parseErrorBody(body, contentType) {
+  if (!body) return { message: '', body: '' };
+  if (contentType.includes('application/json')) {
+    try {
+      const parsed = JSON.parse(body);
+      const message = parsed.message ?? parsed.ocs?.meta?.message ?? '';
+      return { message, body: parsed };
+    } catch {
+      // Some Nextcloud errors lie about content-type; keep the safe text body.
+    }
+  }
+  return { message: body, body };
 }
 
 const isLive = (x) => !x.archived && Number(x.deletedAt ?? 0) === 0;
@@ -37,27 +57,73 @@ export class DeckClient {
     this.#auth = 'Basic ' + btoa(`${username}:${password}`);
   }
 
-  async #get(path, etag) {
-    // M0.1: only Authorization + Accept may be sent. `OCS-APIRequest` is NOT in
-    // access-control-allow-headers, so sending it fails CORS preflight. Verified
-    // unnecessary: GET /boards without it returns 200 and valid JSON.
-    const headers = { Authorization: this.#auth, Accept: 'application/json' };
+  deck(path, options = {}) {
+    return this.#request(API, path, { ...options, ocs: false });
+  }
 
-    // M0.4: If-Modified-Since returns HTTP 500 here (Nextcloud's
-    // Util::parseHTTPDate rejects the standard header format). ETags only.
+  ocs(path, options = {}) {
+    return this.#request(OCS, path, { ...options, ocs: true, unwrapOcs: true });
+  }
+
+  async #request(prefix, path, options) {
+    const {
+      method = 'GET',
+      body,
+      etag,
+      signal,
+      responseType = 'json',
+      ocs = false,
+      unwrapOcs = false,
+      headers: extraHeaders = {},
+    } = options;
+
+    const headers = { Authorization: this.#auth, Accept: 'application/json', ...extraHeaders };
+    // M0.1: Deck REST CORS allows Authorization/Content-Type/Accept only.
+    // `OCS-APIRequest` on `/index.php/apps/deck/api/...` fails preflight. OCS
+    // endpoints are the opposite: Nextcloud expects this marker there.
+    if (ocs) headers['OCS-APIRequest'] = 'true';
+
+    // M0.4: If-Modified-Since returns HTTP 500. Conditional reads use ETags only.
     if (etag) headers['If-None-Match'] = etag;
 
-    const res = await fetch(this.#base + API + path, { headers });
+    const init = { method, headers, credentials: 'omit', signal };
+    if (body !== undefined) {
+      if (isRawBody(body)) {
+        init.body = body;
+      } else {
+        headers['Content-Type'] ??= 'application/json';
+        init.body = typeof body === 'string' ? body : JSON.stringify(body);
+      }
+    }
+
+    let res;
+    try {
+      res = await fetch(this.#base + prefix + path, init);
+    } catch (err) {
+      if (err?.name === 'AbortError') throw new DeckAbortError();
+      throw err;
+    }
 
     // 304 has no body - must return before attempting to parse JSON.
     if (res.status === 304) return { notModified: true, etag };
-    if (!res.ok) throw new DeckError(res.status, await res.text().catch(() => ''));
+    if (!res.ok) {
+      const text = redact(await res.text().catch(() => ''), this.#auth);
+      throw new DeckError(res.status, text, {
+        method,
+        path,
+        contentType: res.headers.get('Content-Type') ?? '',
+      });
+    }
 
-    return { data: await res.json(), etag: res.headers.get('ETag') };
+    const result = { data: await readResponse(res, responseType), etag: res.headers.get('ETag') };
+    if (unwrapOcs && result.data?.ocs && Object.hasOwn(result.data.ocs, 'data')) {
+      result.data = result.data.ocs.data;
+    }
+    return result;
   }
 
   async getBoards(etag) {
-    const r = await this.#get('/boards', etag);
+    const r = await this.deck('/boards', { etag });
     if (r.notModified) return r;
     return { ...r, data: r.data.filter((b) => isLive(b) && canEdit(b)) };
   }
@@ -74,7 +140,7 @@ export class DeckClient {
   // 200. Cheap change-detection therefore has to be driven from /boards
   // (whose ETag covers board lastModified), not from this endpoint.
   async getStacks(boardId, etag) {
-    const r = await this.#get(`/boards/${boardId}/stacks`, etag);
+    const r = await this.deck(`/boards/${boardId}/stacks`, { etag });
     if (r.notModified) return r;
 
     const stacks = r.data
@@ -113,26 +179,32 @@ export class DeckClient {
     };
     if (card.duedate) body.duedate = card.duedate;
 
-    const res = await fetch(
-      `${this.#base}${API}/boards/${toBoardId}/stacks/${toStackId}/cards/${card.id}`,
-      {
-        method: 'PUT',
-        headers: {
-          Authorization: this.#auth,
-          Accept: 'application/json',
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(body),
-      }
-    );
-    if (!res.ok) throw new DeckError(res.status, await res.text().catch(() => ''));
-    return res.json();
+    const r = await this.deck(`/boards/${toBoardId}/stacks/${toStackId}/cards/${card.id}`, {
+      method: 'PUT',
+      body,
+    });
+    return r.data;
   }
+}
 
-  // Deep-link into Deck's own UI for anything out of scope (PLAN.md §2.3).
-  cardUrl(boardId, cardId) {
-    return `${this.#base}/index.php/apps/deck/board/${boardId}/card/${cardId}`;
-  }
+function isRawBody(body) {
+  return (
+    (typeof FormData !== 'undefined' && body instanceof FormData) ||
+    (typeof Blob !== 'undefined' && body instanceof Blob) ||
+    (typeof ArrayBuffer !== 'undefined' && body instanceof ArrayBuffer)
+  );
+}
+
+function redact(text, auth) {
+  return String(text).replaceAll(auth, '[redacted]');
+}
+
+async function readResponse(res, responseType) {
+  if (responseType === 'arrayBuffer') return res.arrayBuffer();
+  if (responseType === 'blob') return res.blob();
+  if (responseType === 'text') return res.text();
+  if (res.status === 204) return null;
+  return res.json();
 }
 
 // Sparse ordering (M0.4). Deck's update() does NOT reindex the target stack -

@@ -1,0 +1,5 @@
+PASS Deck GET omits OCS-APIRequest
+PASS OCS GET includes OCS-APIRequest: true
+PASS both requests carry Authorization
+PASS credentials mode is omit
+PASS ocs.data unwrapped at transport boundary
