@@ -12,6 +12,7 @@
   import CardMetadataEditor from './components/CardMetadataEditor.svelte';
   import CardComments from './components/CardComments.svelte';
   import CardAttachments from './components/CardAttachments.svelte';
+  import CardLifecycleMenu from './components/CardLifecycleMenu.svelte';
 
   const client = new DeckClient({
     baseUrl: import.meta.env.VITE_NC_URL,
@@ -26,6 +27,7 @@
   const detail = createCardDetailStore(client, {
     currentUser: import.meta.env.VITE_NC_USER,
     onCard: (card) => board.replaceCard(card),
+    onRemoveCard: (cardId) => board.removeCard(cardId),
   });
 
   let boards = $state([]);
@@ -192,6 +194,13 @@
           onDelete={(attachment) => detail.removeAttachment(attachment.id)}
           onRestore={(attachment) => detail.restoreDeletedAttachment(attachment.id)}
           onDownload={handleDownload}
+        />
+        <CardLifecycleMenu
+          card={detail.state.card}
+          error={detail.state.error}
+          onArchive={detail.archive}
+          onUnarchive={detail.unarchive}
+          onDelete={detail.softDelete}
         />
       {/snippet}
     </CardDetailModal>

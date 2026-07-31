@@ -1,4 +1,4 @@
-import { getCard, updateCard } from './cards.js';
+import { archiveCard, deleteCard, getCard, unarchiveCard, updateCard } from './cards.js';
 import { assignLabel, assignUser, removeLabel, unassignUser } from './assignments.js';
 import { createComment, deleteComment, listComments, updateComment } from './comments.js';
 import {
@@ -9,7 +9,10 @@ import {
   uploadAttachment,
 } from './attachments.js';
 
-export function createCardDetailStore(client, { currentUser = null, onCard = () => {} } = {}) {
+export function createCardDetailStore(
+  client,
+  { currentUser = null, onCard = () => {}, onRemoveCard = () => {} } = {},
+) {
   const s = $state({
     boardId: null,
     stackId: null,
@@ -187,6 +190,49 @@ export function createCardDetailStore(client, { currentUser = null, onCard = () 
     return r;
   }
 
+  // Lifecycle actions only touch the board once the server has confirmed them:
+  // an optimistic removal here would be unrecoverable, since Deck exposes no
+  // restore endpoint for a soft-deleted card.
+  async function runLifecycle(action) {
+    const cardId = s.cardId;
+    if (!cardId) return false;
+
+    s.saving += 1;
+    s.error = null;
+    try {
+      await action(client, cardId);
+      onRemoveCard(cardId);
+      close({ discard: true });
+      return true;
+    } catch (e) {
+      s.error = messageOf(e);
+      return false;
+    } finally {
+      s.saving -= 1;
+    }
+  }
+
+  const archive = () => runLifecycle(archiveCard);
+  const softDelete = () => runLifecycle(deleteCard);
+
+  async function unarchive() {
+    const cardId = s.cardId;
+    if (!cardId) return false;
+
+    s.saving += 1;
+    s.error = null;
+    try {
+      const r = await unarchiveCard(client, cardId);
+      applyCard(r.data);
+      return true;
+    } catch (e) {
+      s.error = messageOf(e);
+      return false;
+    } finally {
+      s.saving -= 1;
+    }
+  }
+
   async function reloadComments() {
     s.comments = await listComments(client, s.cardId, currentUser);
     return s.comments;
@@ -252,6 +298,9 @@ export function createCardDetailStore(client, { currentUser = null, onCard = () 
     removeLabel: (labelId) => label(removeLabel, labelId),
     assignUser: (userId, type) => user(assignUser, userId, type),
     unassignUser: (userId, type) => user(unassignUser, userId, type),
+    archive,
+    unarchive,
+    softDelete,
     reloadComments,
     addComment,
     editComment,
