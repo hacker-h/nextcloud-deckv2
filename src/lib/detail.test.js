@@ -164,7 +164,11 @@ describe('card detail store', () => {
     await expect(detail.saveCore({ title: 'Draft title' })).rejects.toMatchObject({ status: 500 });
 
     expect(detail.state.card.title).toBe('Prior title');
-    expect(detail.state.error).toBe('write exploded');
+    expect(detail.state.actionError).toBe('write exploded');
+    expect(detail.state.actionScope).toBe('core');
+    // A failed write must not masquerade as a load failure, or the modal would
+    // swap the editor for its full-body retry view and strand the draft.
+    expect(detail.state.error).toBeNull();
     expect(detail.state.dirty).toBe(true);
     expect(detail.state.draft).toMatchObject({ title: 'Draft title' });
   });
@@ -259,6 +263,33 @@ describe('card detail store', () => {
     expect(synced).toHaveBeenCalledWith(
       expect.objectContaining({ id: 77, labels: [expect.objectContaining({ id: 520 })] }),
     );
+  });
+
+  it('keeps the card open and reports a failed archive as an action error', async () => {
+    const c = readyClient(card(77, { title: 'Stays put' }));
+    const base = c.deck;
+    c.deck = vi.fn((path, options = {}) => {
+      if (path.endsWith('/archive')) {
+        throw new DeckError(500, JSON.stringify({ message: 'archive exploded' }), {
+          method: options.method,
+          path,
+          contentType: 'application/json',
+        });
+      }
+      return base(path, options);
+    });
+    const removed = vi.fn();
+    const detail = createCardDetailStore(c, { currentUser: 'alice', onRemoveCard: removed });
+    await openReady(detail);
+
+    expect(await detail.archive()).toBe(false);
+
+    expect(detail.state.actionError).toBe('archive exploded');
+    expect(detail.state.actionScope).toBe('lifecycle');
+    expect(detail.state.error).toBeNull();
+    expect(detail.state.cardId).toBe(77);
+    expect(detail.state.card).toMatchObject({ title: 'Stays put' });
+    expect(removed).not.toHaveBeenCalled();
   });
 
   it('republishes tile counters when a comment is added or removed', async () => {

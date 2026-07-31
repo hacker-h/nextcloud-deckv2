@@ -22,6 +22,8 @@ export function createCardDetailStore(
     attachments: [],
     loading: false,
     error: null,
+    actionError: null,
+    actionScope: null,
     dirty: false,
     draftPending: false,
     saving: 0,
@@ -36,6 +38,16 @@ export function createCardDetailStore(
   const sameOpen = (token, cardId) => token === loadToken && s.cardId === cardId;
   const target = () => ({ boardId: s.boardId, stackId: s.stackId, cardId: s.cardId });
   const messageOf = (e) => e?.message ?? 'Card detail action failed';
+
+  function fail(scope, message) {
+    s.actionError = message;
+    s.actionScope = scope;
+  }
+
+  function clearAction() {
+    s.actionError = null;
+    s.actionScope = null;
+  }
 
   function applyCard(card) {
     if (!card || s.cardId !== card.id) return;
@@ -55,6 +67,7 @@ export function createCardDetailStore(
     s.comments = [];
     s.attachments = [];
     s.error = null;
+    clearAction();
     s.dirty = false;
     s.draftPending = false;
     s.closeBlocked = false;
@@ -96,7 +109,7 @@ export function createCardDetailStore(
     s.dirty = false;
     s.draftPending = false;
     s.closeBlocked = false;
-    s.error = null;
+    clearAction();
   }
 
   function requestClose() {
@@ -124,6 +137,7 @@ export function createCardDetailStore(
     s.attachments = [];
     s.loading = false;
     s.error = null;
+    clearAction();
     s.dirty = false;
     s.closeBlocked = false;
     s.draft = {};
@@ -142,7 +156,7 @@ export function createCardDetailStore(
     const previous = coreQueues.get(cardId) ?? Promise.resolve();
     const run = previous.catch(() => {}).then(async () => {
       s.saving += 1;
-      s.error = null;
+      clearAction();
       try {
         const r = await updateCard(client, { ...queuedTarget, changes: queuedChanges });
         if (s.cardId === cardId) {
@@ -151,6 +165,7 @@ export function createCardDetailStore(
           s.dirty = false;
           s.draftPending = false;
           s.closeBlocked = false;
+          clearAction();
         } else {
           onCard(r.data);
         }
@@ -158,7 +173,7 @@ export function createCardDetailStore(
       } catch (e) {
         if (s.cardId === cardId && snapshot) s.card = snapshot;
         if (s.cardId === cardId) {
-          s.error = messageOf(e);
+          fail('core', messageOf(e));
           s.dirty = true;
           s.draft = { ...s.draft, ...queuedChanges };
         }
@@ -188,7 +203,7 @@ export function createCardDetailStore(
   // card has to be read back before the tile can show the change.
   async function reconcile(r) {
     if (!r.ok) {
-      s.error = r.message;
+      fail('metadata', r.message);
       return r;
     }
     if (r.card) applyCard(r.card);
@@ -212,14 +227,14 @@ export function createCardDetailStore(
     if (!cardId) return false;
 
     s.saving += 1;
-    s.error = null;
+    clearAction();
     try {
       await action(client, target());
       onRemoveCard(cardId);
       close({ discard: true });
       return true;
     } catch (e) {
-      s.error = messageOf(e);
+      fail('lifecycle', messageOf(e));
       return false;
     } finally {
       s.saving -= 1;
@@ -234,13 +249,13 @@ export function createCardDetailStore(
     if (!cardId) return false;
 
     s.saving += 1;
-    s.error = null;
+    clearAction();
     try {
       const r = await unarchiveCard(client, target());
       applyCard(r.data);
       return true;
     } catch (e) {
-      s.error = messageOf(e);
+      fail('lifecycle', messageOf(e));
       return false;
     } finally {
       s.saving -= 1;

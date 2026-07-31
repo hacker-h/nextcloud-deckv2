@@ -301,8 +301,9 @@ test.describe('card detail live CRUD', () => {
       await dialog(page).getByRole('button', { name: fixture.title }).click();
       await dialog(page).getByRole('textbox', { name: 'Card title' }).fill(failedTitle);
       await dialog(page).getByRole('textbox', { name: 'Card title' }).press('Enter');
-      await expect(page.getByRole('alert')).toContainText('forced detail save failure');
-      await expect(dialog(page)).toContainText(fixture.title);
+      await expect(dialog(page).getByRole('alert')).toHaveText('forced detail save failure');
+      await expect(dialog(page).getByRole('button', { name: fixture.title })).toBeVisible();
+      await expect(dialog(page).getByRole('textbox', { name: 'Write a comment' })).toBeVisible();
       expect((await getCard(deck, fixture.id)).title).toBe(fixture.title);
 
       await page.unroute(new RegExp(`/boards/${TEST_BOARD_ID}/stacks/${TEST_STACKS.inbox}/cards/${fixture.id}(?:[?#]|$)`));

@@ -167,7 +167,7 @@
       {#snippet main()}
         <CardCoreEditor
           card={detail.state.card}
-          error={detail.state.error}
+          error={detail.state.actionScope === 'core' ? detail.state.actionError : null}
           onDraftChange={detail.setDraftPending}
           onSave={(changes) => {
             detail.editDraft(changes);
@@ -185,6 +185,7 @@
       {#snippet sidebar()}
         <CardMetadataEditor
           card={detail.state.card}
+          error={detail.state.actionScope === 'metadata' ? detail.state.actionError : null}
           labels={assignmentOptions.labels}
           participants={assignmentOptions.participants}
           onAssignLabel={detail.assignLabel}
@@ -202,7 +203,7 @@
         />
         <CardLifecycleMenu
           card={detail.state.card}
-          error={detail.state.error}
+          error={detail.state.actionScope === 'lifecycle' ? detail.state.actionError : null}
           onArchive={detail.archive}
           onUnarchive={detail.unarchive}
           onDelete={detail.softDelete}
