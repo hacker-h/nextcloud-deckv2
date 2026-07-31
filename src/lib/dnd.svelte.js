@@ -101,6 +101,43 @@ function stopAutoScroll() {
 // began it.
 let g = null;
 
+function swallowNextClick() {
+  const kill = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
+  window.addEventListener('click', kill, { capture: true, once: true });
+  setTimeout(() => window.removeEventListener('click', kill, { capture: true }), 0);
+}
+
+function modifierContext(event) {
+  return {
+    shiftKey: event.shiftKey,
+    altKey: event.altKey,
+    ctrlKey: event.ctrlKey,
+    metaKey: event.metaKey,
+  };
+}
+
+function gestureContext(gesture, event) {
+  return {
+    card: gesture.card,
+    cardIds: [...gesture.cardIds],
+    event,
+    ...modifierContext(event),
+    shiftKey: gesture.shiftKey || event.shiftKey,
+  };
+}
+
+function finishGesture() {
+  const gesture = g;
+  g = null;
+
+  window.removeEventListener('pointermove', onMove);
+  window.removeEventListener('pointerup', onUp);
+  window.removeEventListener('pointercancel', onCancel);
+  document.body.style.cursor = '';
+  stopAutoScroll();
+  return gesture;
+}
+
 function onMove(e) {
   if (!g) return;
 
@@ -138,24 +175,28 @@ function onMove(e) {
   }
 }
 
-function onUp() {
+function onCancel() {
   if (!g) return;
-  const gesture = g;
-  g = null;
+  finishGesture();
+  resetDrag();
+}
 
-  window.removeEventListener('pointermove', onMove);
-  window.removeEventListener('pointerup', onUp);
-  window.removeEventListener('pointercancel', onUp);
-  document.body.style.cursor = '';
-  stopAutoScroll();
+function onUp(e) {
+  if (!g) return;
+  const gesture = finishGesture();
 
-  if (!gesture.moved) { resetDrag(); return; }
+  if (!gesture.moved) {
+    resetDrag();
+    swallowNextClick();
+    const context = gestureContext(gesture, e);
+    const select = gesture.onSelect ?? gesture.onSelectReserved;
+    if (context.shiftKey) select?.(context);
+    else gesture.onActivate?.(context);
+    return;
+  }
 
-  // Swallow the click that follows a drag, or the card opens in Deck. It has to
-  // be caught on the window, because the source node no longer exists.
-  const kill = (ev) => { ev.preventDefault(); ev.stopPropagation(); };
-  window.addEventListener('click', kill, { capture: true, once: true });
-  setTimeout(() => window.removeEventListener('click', kill, { capture: true }), 0);
+  // Browser click synthesis happens after pointerup; drag has already consumed it.
+  swallowNextClick();
 
   const toStackId = drag.overStack;
   const index = drag.overIndex;
@@ -169,7 +210,7 @@ function onUp() {
 export function draggable(node, opts) {
   function down(e) {
     // Left button only, and never start a second gesture.
-    if (e.button !== 0 || g) return;
+    if (e.button !== 0 || e.isPrimary === false || g) return;
 
     const r = node.getBoundingClientRect();
     const o = opts();
@@ -179,7 +220,11 @@ export function draggable(node, opts) {
       startY: e.clientY,
       card: o.card,
       cardIds: o.cardIds ?? [o.card.id],
+      onActivate: o.onActivate,
+      onSelect: o.onSelect,
+      onSelectReserved: o.onSelectReserved,
       onDrop: o.onDrop,
+      shiftKey: e.shiftKey,
       w: r.width,
       h: r.height,
       grabX: e.clientX - r.left,
@@ -188,7 +233,7 @@ export function draggable(node, opts) {
 
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
-    window.addEventListener('pointercancel', onUp);
+    window.addEventListener('pointercancel', onCancel);
   }
 
   // Cards are anchors; the browser's own link dragging would hijack the gesture.
