@@ -12,7 +12,17 @@
 
   let labelsOpen = $state(false);
   let peopleOpen = $state(false);
+  let labelQuery = $state('');
+  let peopleQuery = $state('');
   let pending = $state(new Set());
+
+  const matches = (text, query) =>
+    String(text).toLowerCase().includes(query.trim().toLowerCase());
+
+  const shownLabels = $derived(labels.filter((l) => matches(l.title, labelQuery)));
+  const shownParticipants = $derived(
+    participants.filter((p) => matches(p.displayName ?? p.id, peopleQuery)),
+  );
 
   const activeLabels = $derived(card?.labels ?? []);
   const activeLabelIds = $derived(new Set(activeLabels.map((l) => l.id)));
@@ -80,8 +90,9 @@
       Edit labels
     </button>
     {#if labelsOpen}
+      <input class="input search" type="search" aria-label="Search labels" bind:value={labelQuery} />
       <ul class="picker">
-        {#each labels as label (label.id)}
+        {#each shownLabels as label (label.id)}
           <li>
             <button
               class="option"
@@ -96,6 +107,8 @@
               {#if activeLabelIds.has(label.id)}<span class="tick" aria-hidden="true">✓</span>{/if}
             </button>
           </li>
+        {:else}
+          <li class="muted">No matching labels</li>
         {/each}
       </ul>
     {/if}
@@ -117,8 +130,9 @@
       Edit members
     </button>
     {#if peopleOpen}
+      <input class="input search" type="search" aria-label="Search members" bind:value={peopleQuery} />
       <ul class="picker">
-        {#each participants as person (person.id)}
+        {#each shownParticipants as person (person.id)}
           <li>
             <button
               class="option"
@@ -133,6 +147,8 @@
               {#if assignedIds.has(person.id)}<span class="tick" aria-hidden="true">✓</span>{/if}
             </button>
           </li>
+        {:else}
+          <li class="muted">No matching members</li>
         {/each}
       </ul>
     {/if}
@@ -185,6 +201,18 @@
     font-weight: 700;
   }
   .small { width: 24px; height: 24px; }
+
+  .input {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--stack-bg);
+    color: var(--text);
+    font: inherit;
+  }
+  .input:focus { border-color: var(--accent); outline: none; }
+  .search { margin-bottom: 4px; }
 
   .picker {
     width: 100%;

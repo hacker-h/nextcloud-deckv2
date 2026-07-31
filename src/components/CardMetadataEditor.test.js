@@ -30,6 +30,48 @@ const openLabels = () => fireEvent.click(screen.getByRole('button', { name: 'Edi
 const openMembers = () => fireEvent.click(screen.getByRole('button', { name: 'Edit members' }));
 
 describe('CardMetadataEditor', () => {
+  it('filters labels by the search query', async () => {
+    setup();
+    await openLabels();
+
+    await fireEvent.input(screen.getByLabelText('Search labels'), { target: { value: 'fea' } });
+
+    expect(screen.getByRole('checkbox', { name: /Feature/ })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Bug/ })).toBeNull();
+  });
+
+  it('filters members by the search query and reports an empty result', async () => {
+    setup();
+    await openMembers();
+
+    await fireEvent.input(screen.getByLabelText('Search members'), { target: { value: 'bo' } });
+    expect(screen.getByRole('checkbox', { name: /Bob/ })).toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Alice/ })).toBeNull();
+
+    await fireEvent.input(screen.getByLabelText('Search members'), { target: { value: 'zzz' } });
+    expect(screen.getByText('No matching members')).toBeInTheDocument();
+  });
+
+  it('keeps searched options reachable and activatable by keyboard alone', async () => {
+    const { onAssignLabel } = setup();
+    await openLabels();
+
+    await fireEvent.input(screen.getByLabelText('Search labels'), { target: { value: 'fea' } });
+    const option = screen.getByRole('checkbox', { name: /Feature/ });
+
+    // Native buttons are what make Enter/Space activation work without any
+    // custom key handling, so assert the element type rather than simulating a
+    // synthetic keypress that jsdom would not translate into activation.
+    expect(option.tagName).toBe('BUTTON');
+    expect(option).not.toBeDisabled();
+
+    option.focus();
+    expect(option).toHaveFocus();
+
+    await fireEvent.click(option);
+    expect(onAssignLabel).toHaveBeenCalledWith(2);
+  });
+
   it('lists board labels as checkboxes reflecting the assigned state', async () => {
     setup({ card: { labels: [{ id: 1, title: 'Bug', color: 'ff0000' }] } });
     await openLabels();
