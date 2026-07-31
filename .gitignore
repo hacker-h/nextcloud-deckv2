@@ -6,3 +6,4 @@ dist/
 test-results/
 playwright-report/
 .sisyphus/evidence/
+.sisyphus/boulder.json
