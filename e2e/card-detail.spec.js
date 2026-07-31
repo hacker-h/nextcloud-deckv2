@@ -93,22 +93,40 @@ async function listFixtures(deck) {
   return stacks.flatMap((stack) => stack.cards ?? []).filter((candidate) => candidate.title?.startsWith(RUN_PREFIX));
 }
 
+async function listCardComments(id) {
+  return (await ocsRequest('GET', `/apps/deck/api/v1.0/cards/${id}/comments`)) ?? [];
+}
+
+async function listLiveAttachments(deck, id) {
+  const attachments = asArray(await deck.request('GET', `${fullPath(id)}/attachments`)) ?? [];
+  return attachments.filter((a) => !a.deletedAt);
+}
+
+// Records what survived each sweep so the suite can prove the board is clean
+// instead of trusting that the delete calls were issued. Measured while the
+// card still exists, since a deleted card reports no children either way.
+const cleanupResidue = [];
+
 async function cleanupCard(deck, id) {
+  const residue = { id, comments: [], attachments: [] };
+
   try {
-    const comments = await ocsRequest('GET', `/apps/deck/api/v1.0/cards/${id}/comments`);
-    for (const comment of comments ?? []) {
+    for (const comment of await listCardComments(id)) {
       await ocsRequest('DELETE', `/apps/deck/api/v1.0/cards/${id}/comments/${comment.id}`).catch(() => {});
     }
+    residue.comments = (await listCardComments(id)).map((c) => c.id);
   } catch {}
 
   try {
-    const attachments = asArray(await deck.request('GET', `${fullPath(id)}/attachments`));
-    for (const attachment of attachments ?? []) {
-      if (!attachment.deletedAt) await deck.request('DELETE', `${fullPath(id)}/attachments/${attachment.id}`).catch(() => {});
+    for (const attachment of await listLiveAttachments(deck, id)) {
+      await deck.request('DELETE', `${fullPath(id)}/attachments/${attachment.id}`).catch(() => {});
     }
+    residue.attachments = (await listLiveAttachments(deck, id)).map((a) => a.id);
   } catch {}
 
   await deck.request('DELETE', fullPath(id)).catch(() => {});
+  if (residue.comments.length || residue.attachments.length) cleanupResidue.push(residue);
+  return residue;
 }
 
 async function openTestBoard(page) {
@@ -152,8 +170,16 @@ test.describe('card detail live CRUD', () => {
     for (const id of created) await cleanupCard(deck, id);
 
     const leftovers = await listFixtures(deck);
+    const undeleted = cleanupResidue;
     mkdirSync(dirname(EVIDENCE), { recursive: true });
-    writeFileSync(EVIDENCE, `prefix=${RUN_PREFIX}\nleftovers=${JSON.stringify(leftovers.map((c) => ({ id: c.id, title: c.title })))}\n`);
+    writeFileSync(
+      EVIDENCE,
+      `prefix=${RUN_PREFIX}\n` +
+        `leftovers=${JSON.stringify(leftovers.map((c) => ({ id: c.id, title: c.title })))}\n` +
+        `sweptCards=${JSON.stringify([...created])}\n` +
+        `undeletedChildren=${JSON.stringify(undeleted)}\n`,
+    );
+    expect(undeleted).toEqual([]);
     expect(leftovers).toEqual([]);
   });
 
