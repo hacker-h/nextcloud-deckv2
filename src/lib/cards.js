@@ -1,9 +1,9 @@
-export function getCard(client, cardId, etag) {
-  return client.deck(`/cards/${cardId}`, { etag });
+export function getCard(client, { boardId, stackId, cardId, etag, signal }) {
+  return client.deck(`/boards/${boardId}/stacks/${stackId}/cards/${cardId}`, { etag, signal });
 }
 
 export async function updateCard(client, { boardId, stackId, cardId, changes }) {
-  const fresh = await getCard(client, cardId);
+  const fresh = await getCard(client, { boardId, stackId, cardId });
   const body = buildCardPayload(fresh.data, changes);
 
   return client.deck(`/boards/${boardId}/stacks/${stackId}/cards/${cardId}`, {
@@ -12,16 +12,16 @@ export async function updateCard(client, { boardId, stackId, cardId, changes }) 
   });
 }
 
-export function archiveCard(client, cardId) {
-  return client.deck(`/cards/${cardId}/archive`, { method: 'PUT' });
+export function archiveCard(client, { boardId, stackId, cardId }) {
+  return client.deck(`/boards/${boardId}/stacks/${stackId}/cards/${cardId}/archive`, { method: 'PUT' });
 }
 
-export function unarchiveCard(client, cardId) {
-  return client.deck(`/cards/${cardId}/unarchive`, { method: 'PUT' });
+export function unarchiveCard(client, { boardId, stackId, cardId }) {
+  return client.deck(`/boards/${boardId}/stacks/${stackId}/cards/${cardId}/unarchive`, { method: 'PUT' });
 }
 
-export function deleteCard(client, cardId) {
-  return client.deck(`/cards/${cardId}`, { method: 'DELETE' });
+export function deleteCard(client, { boardId, stackId, cardId }) {
+  return client.deck(`/boards/${boardId}/stacks/${stackId}/cards/${cardId}`, { method: 'DELETE' });
 }
 
 export function buildCardPayload(card, changes = {}) {

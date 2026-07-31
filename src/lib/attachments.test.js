@@ -11,7 +11,8 @@ import {
 } from './attachments.js';
 
 const CARD = 10193;
-const BASE = 'https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/cards/10193/attachments';
+const TARGET = { boardId: 116, stackId: 366, cardId: CARD };
+const BASE = 'https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/366/cards/10193/attachments';
 
 function client() {
   return new DeckClient({ baseUrl: 'https://nextcloud-alice.example', username: 'alice', password: 'app-password' });
@@ -53,7 +54,7 @@ describe('attachment operations', () => {
   it('uploads a text file as multipart and retains name, type, and size', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(serverAttachment()));
 
-    const uploaded = await uploadAttachment(client(), CARD, textFile());
+    const uploaded = await uploadAttachment(client(), TARGET, textFile());
 
     const [url, init] = fetch.mock.calls[0];
     expect(url).toBe(BASE);
@@ -79,7 +80,7 @@ describe('attachment operations', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(json(serverAttachment({ extendedData: { filesize: 0, mimetype: 'text/plain', info: { filename: 'empty', extension: 'txt' } } })));
 
-    await expect(uploadAttachment(client(), CARD, textFile('empty.txt', ''))).resolves.toMatchObject({
+    await expect(uploadAttachment(client(), TARGET, textFile('empty.txt', ''))).resolves.toMatchObject({
       name: 'empty.txt',
       size: 0,
     });
@@ -94,14 +95,14 @@ describe('attachment operations', () => {
       .mockResolvedValueOnce(json([serverAttachment()]));
     const c = client();
 
-    const before = await listAttachments(c, CARD);
-    await expect(uploadAttachment(c, CARD, textFile('huge.bin'))).rejects.toMatchObject({
+    const before = await listAttachments(c, TARGET);
+    await expect(uploadAttachment(c, TARGET, textFile('huge.bin'))).rejects.toMatchObject({
       name: 'DeckError',
       status: 413,
       message: 'file is too big',
     });
 
-    await expect(listAttachments(c, CARD)).resolves.toEqual(before);
+    await expect(listAttachments(c, TARGET)).resolves.toEqual(before);
     expect(fetch).toHaveBeenCalledTimes(3);
   });
 
@@ -111,8 +112,8 @@ describe('attachment operations', () => {
       .mockResolvedValueOnce(json({ message: 'boom' }, 500));
     const c = client();
 
-    await expect(uploadAttachment(c, CARD, textFile())).rejects.toMatchObject({ status: 409 });
-    await expect(uploadAttachment(c, CARD, textFile())).rejects.toMatchObject({ status: 500 });
+    await expect(uploadAttachment(c, TARGET, textFile())).rejects.toMatchObject({ status: 409 });
+    await expect(uploadAttachment(c, TARGET, textFile())).rejects.toMatchObject({ status: 500 });
   });
 
   it('maps a cancelled upload to an abort error', async () => {
@@ -122,7 +123,7 @@ describe('attachment operations', () => {
     controller.abort();
 
     await expect(
-      uploadAttachment(client(), CARD, textFile(), { signal: controller.signal })
+      uploadAttachment(client(), TARGET, textFile(), { signal: controller.signal })
     ).rejects.toMatchObject({ name: 'AbortError' });
   });
 
@@ -130,9 +131,9 @@ describe('attachment operations', () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(json(serverAttachment())));
     const c = client();
 
-    await updateAttachment(c, CARD, 88, textFile('detail-renamed.txt'));
-    await deleteAttachment(c, CARD, 88);
-    await restoreAttachment(c, CARD, 88);
+    await updateAttachment(c, TARGET, 88, textFile('detail-renamed.txt'));
+    await deleteAttachment(c, TARGET, 88);
+    await restoreAttachment(c, TARGET, 88);
 
     expect(fetch.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
       [`${BASE}/88`, 'PUT'],
@@ -146,7 +147,7 @@ describe('attachment operations', () => {
       .spyOn(globalThis, 'fetch')
       .mockResolvedValue(new Response('card detail QA\n', { status: 200, headers: { 'Content-Type': 'text/plain' } }));
 
-    const blob = await downloadAttachment(client(), CARD, 88);
+    const blob = await downloadAttachment(client(), TARGET, 88);
 
     expect(blob).toBeInstanceOf(Blob);
     expect(fetch.mock.calls[0][0]).toBe(`${BASE}/88`);

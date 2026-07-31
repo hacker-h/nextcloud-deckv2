@@ -6,47 +6,47 @@
 
 export const DECK_FILE = 'deck_file';
 
-const path = (cardId) => `/cards/${cardId}/attachments`;
+const path = ({ boardId, stackId, cardId }) => `/boards/${boardId}/stacks/${stackId}/cards/${cardId}/attachments`;
 
-export async function listAttachments(client, cardId, { signal } = {}) {
-  const r = await client.deck(path(cardId), { signal });
+export async function listAttachments(client, target, { signal } = {}) {
+  const r = await client.deck(path(target), { signal });
   return (r.data ?? []).map(normalizeAttachment);
 }
 
-export async function uploadAttachment(client, cardId, file, { type = DECK_FILE, signal } = {}) {
+export async function uploadAttachment(client, target, file, { type = DECK_FILE, signal } = {}) {
   const form = new FormData();
   form.append('type', type);
   form.append('file', file, file.name);
 
-  const r = await client.deck(path(cardId), { method: 'POST', body: form, signal });
+  const r = await client.deck(path(target), { method: 'POST', body: form, signal });
   return normalizeAttachment(r.data);
 }
 
-export async function updateAttachment(client, cardId, attachmentId, file, { type = DECK_FILE, signal } = {}) {
+export async function updateAttachment(client, target, attachmentId, file, { type = DECK_FILE, signal } = {}) {
   const form = new FormData();
   form.append('type', type);
   form.append('file', file, file.name);
 
-  const r = await client.deck(`${path(cardId)}/${attachmentId}`, { method: 'PUT', body: form, signal });
+  const r = await client.deck(`${path(target)}/${attachmentId}`, { method: 'PUT', body: form, signal });
   return normalizeAttachment(r.data);
 }
 
-export async function deleteAttachment(client, cardId, attachmentId) {
-  await client.deck(`${path(cardId)}/${attachmentId}`, { method: 'DELETE' });
+export async function deleteAttachment(client, target, attachmentId) {
+  await client.deck(`${path(target)}/${attachmentId}`, { method: 'DELETE' });
   return attachmentId;
 }
 
-export async function restoreAttachment(client, cardId, attachmentId) {
-  const r = await client.deck(`${path(cardId)}/${attachmentId}/restore`, { method: 'PUT' });
+export async function restoreAttachment(client, target, attachmentId) {
+  const r = await client.deck(`${path(target)}/${attachmentId}/restore`, { method: 'PUT' });
   return normalizeAttachment(r.data);
 }
 
 // Downloads go through the authenticated transport rather than a plain <a href>
 // so credentials stay in the Authorization header and never reach the URL,
 // browser history, or proxy logs.
-export function downloadAttachment(client, cardId, attachmentId, { signal } = {}) {
+export function downloadAttachment(client, target, attachmentId, { signal } = {}) {
   return client
-    .deck(`${path(cardId)}/${attachmentId}`, { responseType: 'blob', signal })
+    .deck(`${path(target)}/${attachmentId}`, { responseType: 'blob', signal })
     .then((r) => r.data);
 }
 

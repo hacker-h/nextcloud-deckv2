@@ -38,12 +38,12 @@ describe('card API operations', () => {
   it('reads a card with an optional ETag', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(richCard(), { headers: { ETag: '"card-etag"' } }));
 
-    await expect(getCard(client(), 77, '"old-etag"')).resolves.toMatchObject({
+    await expect(getCard(client(), { boardId: 116, stackId: 9, cardId: 77, etag: '"old-etag"' })).resolves.toMatchObject({
       data: expect.objectContaining({ id: 77 }),
       etag: '"card-etag"',
     });
 
-    expect(fetch.mock.calls[0][0]).toBe('https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/cards/77');
+    expect(fetch.mock.calls[0][0]).toBe('https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77');
     expect(fetch.mock.calls[0][1].headers['If-None-Match']).toBe('"old-etag"');
   });
 
@@ -84,7 +84,9 @@ describe('card API operations', () => {
       changes: { title: 'Fresh title' },
     });
 
-    expect(fetch.mock.calls[0][0]).toBe('https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/cards/77');
+    expect(fetch.mock.calls[0][0]).toBe(
+      'https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77'
+    );
     expect(fetch.mock.calls[0][1].method).toBe('GET');
     expect(fetch.mock.calls[1][0]).toBe(
       'https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77'
@@ -127,14 +129,14 @@ describe('card API operations', () => {
   it('archives, unarchives, and soft-deletes through the expected endpoints', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockImplementation(() => Promise.resolve(json({ id: 77 })));
 
-    await archiveCard(client(), 77);
-    await unarchiveCard(client(), 77);
-    await deleteCard(client(), 77);
+    await archiveCard(client(), { boardId: 116, stackId: 9, cardId: 77 });
+    await unarchiveCard(client(), { boardId: 116, stackId: 9, cardId: 77 });
+    await deleteCard(client(), { boardId: 116, stackId: 9, cardId: 77 });
 
     expect(fetch.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
-      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/cards/77/archive', 'PUT'],
-      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/cards/77/unarchive', 'PUT'],
-      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/cards/77', 'DELETE'],
+      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77/archive', 'PUT'],
+      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77/unarchive', 'PUT'],
+      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77', 'DELETE'],
     ]);
   });
 
@@ -150,6 +152,10 @@ describe('card API operations', () => {
       })
     );
 
-    await expect(operation(client(), 77)).rejects.toMatchObject({ name: 'DeckError', status: 403, message: 'denied' });
+    await expect(operation(client(), { boardId: 116, stackId: 9, cardId: 77 })).rejects.toMatchObject({
+      name: 'DeckError',
+      status: 403,
+      message: 'denied',
+    });
   });
 });

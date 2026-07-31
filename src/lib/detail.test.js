@@ -27,12 +27,13 @@ function card(id, overrides = {}) {
 }
 
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+const cardPath = (boardId, stackId, cardId) => `/boards/${boardId}/stacks/${stackId}/cards/${cardId}`;
 
 function readyClient(openCard = card(77)) {
   return {
     deck: vi.fn((path) => {
       if (path.includes('/attachments')) return Promise.resolve({ data: [] });
-      if (path === `/cards/${openCard.id}`) return Promise.resolve({ data: openCard });
+      if (path === cardPath(openCard.boardId, openCard.stackId, openCard.id)) return Promise.resolve({ data: openCard });
       return Promise.resolve({ data: openCard });
     }),
     ocs: vi.fn(() => Promise.resolve({ data: [] })),
@@ -76,8 +77,8 @@ describe('card detail store', () => {
       deck: vi.fn((path, options = {}) => {
         if (path.includes('/attachments')) return Promise.resolve({ data: [] });
         signals.push(options.signal);
-        if (path === '/cards/1') return a.promise;
-        if (path === '/cards/2') return b.promise;
+        if (path === cardPath(116, 9, 1)) return a.promise;
+        if (path === cardPath(116, 10, 2)) return b.promise;
         return Promise.reject(new Error(`unexpected ${path}`));
       }),
       ocs: vi.fn(() => Promise.resolve({ data: [] })),
@@ -107,10 +108,10 @@ describe('card detail store', () => {
     c.deck = vi.fn((path, options = {}) => {
       calls.push([path, options.method ?? 'GET']);
       if (path.includes('/attachments')) return Promise.resolve({ data: [] });
-      if (path === '/cards/77' && calls.length === 1) return Promise.resolve({ data: card(77, { title: 'Initial' }) });
-      if (path === '/cards/77' && calls.filter(([p]) => p === '/cards/77').length === 2) return get1.promise;
-      if (path === '/boards/116/stacks/9/cards/77') return calls.filter(([, m]) => m === 'PUT').length === 1 ? put1.promise : put2.promise;
-      if (path === '/cards/77') return get2.promise;
+      if (path === cardPath(116, 9, 77) && calls.length === 1) return Promise.resolve({ data: card(77, { title: 'Initial' }) });
+      if (path === cardPath(116, 9, 77) && calls.filter(([p]) => p === cardPath(116, 9, 77)).length === 2) return get1.promise;
+      if (path === cardPath(116, 9, 77) && options.method === 'PUT') return calls.filter(([, m]) => m === 'PUT').length === 1 ? put1.promise : put2.promise;
+      if (path === cardPath(116, 9, 77)) return get2.promise;
       return Promise.reject(new Error(`unexpected ${path}`));
     });
     const detail = createCardDetailStore(c);
@@ -144,16 +145,16 @@ describe('card detail store', () => {
     const c = readyClient(card(77, { title: 'Prior title' }));
     c.deck = vi.fn((path, options = {}) => {
       if (path.includes('/attachments')) return Promise.resolve({ data: [] });
-      if (path === '/cards/77') {
-        cardReads += 1;
-        return Promise.resolve({ data: card(77, { title: cardReads === 1 ? 'Prior title' : 'Server before PUT' }) });
-      }
-      if (path === '/boards/116/stacks/9/cards/77') {
+      if (path === cardPath(116, 9, 77) && options.method === 'PUT') {
         throw new DeckError(500, JSON.stringify({ message: 'write exploded' }), {
           method: options.method,
           path,
           contentType: 'application/json',
         });
+      }
+      if (path === cardPath(116, 9, 77)) {
+        cardReads += 1;
+        return Promise.resolve({ data: card(77, { title: cardReads === 1 ? 'Prior title' : 'Server before PUT' }) });
       }
       return Promise.reject(new Error(`unexpected ${path}`));
     });

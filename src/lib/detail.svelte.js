@@ -61,9 +61,9 @@ export function createCardDetailStore(
 
     try {
       const [cardResult, commentsResult, attachmentsResult] = await Promise.all([
-        client.deck(`/cards/${cardId}`, { signal: controller.signal }),
+        getCard(client, { boardId, stackId, cardId, signal: controller.signal }),
         listComments(client, cardId, currentUser),
-        listAttachments(client, cardId, { signal: controller.signal }),
+        listAttachments(client, { boardId, stackId, cardId }, { signal: controller.signal }),
       ]);
       if (!sameOpen(token, cardId)) return;
       s.card = cardResult.data;
@@ -170,7 +170,7 @@ export function createCardDetailStore(
   }
 
   async function refreshCard(cardId = s.cardId) {
-    const r = await getCard(client, cardId);
+    const r = await getCard(client, { ...target(), cardId });
     if (s.cardId === cardId) applyCard(r.data);
     else onCard(r.data);
     return r.data;
@@ -200,7 +200,7 @@ export function createCardDetailStore(
     s.saving += 1;
     s.error = null;
     try {
-      await action(client, cardId);
+      await action(client, target());
       onRemoveCard(cardId);
       close({ discard: true });
       return true;
@@ -222,7 +222,7 @@ export function createCardDetailStore(
     s.saving += 1;
     s.error = null;
     try {
-      const r = await unarchiveCard(client, cardId);
+      const r = await unarchiveCard(client, target());
       applyCard(r.data);
       return true;
     } catch (e) {
@@ -257,30 +257,30 @@ export function createCardDetailStore(
   }
 
   async function reloadAttachments() {
-    s.attachments = await listAttachments(client, s.cardId);
+    s.attachments = await listAttachments(client, target());
     return s.attachments;
   }
 
   async function addAttachment(file, options) {
-    const a = await uploadAttachment(client, s.cardId, file, options);
+    const a = await uploadAttachment(client, target(), file, options);
     s.attachments = [...s.attachments, a];
     return a;
   }
 
   async function replaceAttachment(attachmentId, file, options) {
-    const a = await updateAttachment(client, s.cardId, attachmentId, file, options);
+    const a = await updateAttachment(client, target(), attachmentId, file, options);
     s.attachments = s.attachments.map((x) => (x.id === a.id ? a : x));
     return a;
   }
 
   async function removeAttachment(attachmentId) {
-    const id = await deleteAttachment(client, s.cardId, attachmentId);
+    const id = await deleteAttachment(client, target(), attachmentId);
     s.attachments = s.attachments.filter((x) => x.id !== id);
     return id;
   }
 
   async function restoreDeletedAttachment(attachmentId) {
-    const a = await restoreAttachment(client, s.cardId, attachmentId);
+    const a = await restoreAttachment(client, target(), attachmentId);
     s.attachments = s.attachments.map((x) => (x.id === a.id ? a : x));
     return a;
   }

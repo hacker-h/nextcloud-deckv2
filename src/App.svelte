@@ -78,18 +78,22 @@
   // Deck has no rename verb: the file is re-PUT under the new name, so the
   // existing bytes must be fetched first or the content would be truncated.
   async function handleRename(attachment, name) {
-    const blob = await downloadAttachment(client, detail.state.cardId, attachment.id);
+    const blob = await downloadAttachment(client, detailTarget(), attachment.id);
     await detail.replaceAttachment(attachment.id, new File([blob], name, { type: attachment.mimetype ?? blob.type }));
   }
 
   async function handleDownload(attachment) {
-    const blob = await downloadAttachment(client, detail.state.cardId, attachment.id);
+    const blob = await downloadAttachment(client, detailTarget(), attachment.id);
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
     a.download = attachment.name;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  function detailTarget() {
+    return { boardId: detail.state.boardId, stackId: detail.state.stackId, cardId: detail.state.cardId };
   }
 
   async function init() {
