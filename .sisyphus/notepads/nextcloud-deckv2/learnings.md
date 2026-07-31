@@ -70,3 +70,43 @@
   to survive `docker compose up -d` container recreation.
 
 2026-07-31: Deck card detail, lifecycle, and attachment REST calls must include boardId and stackId: `/boards/{boardId}/stacks/{stackId}/cards/{cardId}`. Short `/cards/{id}` Deck REST routes return 405; OCS comments remain the separate allowed short-form comments endpoint.
+
+2026-07-31 T21: Live assignment endpoints (`assignLabel`/`assignUser`) can return HTTP 200 with a JSON `null` body while still persisting the assignment. E2E assertions should poll the full card read, then close/reopen to assert visible hydration.
+
+2026-07-31 T21: `guardedPage` treats any mutating URL without a literal `/boards/116` segment as unsafe. For live OCS comment mutations, a raw query marker like `?guard=/boards/116` keeps the guard scoped without mocking or changing the OCS route semantics.
+
+2026-07-31 T21 correction: query-string board markers are unsafe. The e2e guard now reads only the URL path for `/boards/{id}` and permits boardless `/cards/{id}` mutations only when the card id is registered/proven on board 116.
+
+2026-07-31 T21: Deck full-card reads expose comment counters reliably after OCS comment creation, but attachment counters can remain stale even when `GET .../attachments` proves the uploaded file exists. Keep attachment persistence assertions on the attachment endpoint/modal, not board-stack card counters.
+
+## T21 live E2E CRUD suite
+
+- Two distinct flake classes looked identical at first and had to be separated before either could be fixed:
+  1. `net::ERR_CONNECTION_REFUSED at http://localhost:5173/` — Playwright's managed `webServer` (`reuseExistingServer: true`) dying between/within runs. Fixed by starting one persistent `npm run dev` and letting the config reuse it.
+  2. `getaddrinfo ENOTFOUND nextcloud-alice.xhacker.de` — the host is IPv6-only (AAAA record, no A record), so name resolution is intermittently flaky. Not a test bug; re-verified with `host` + `curl` before rerunning.
+- Never diagnose a flake as "the guard is wrong" and monkeypatch it. The board-scoping guard was suspected, verified directly with a standalone node harness (7/7 cases), and turned out to be entirely correct — the real causes were infra.
+- `assertBoardScoped` semantics worth preserving: reads (GET) always allowed; writes must name board 116 in the **path**; a board id in the **query string** must never satisfy the check (smuggling); OCS comment URLs carry no board segment at all, so they are only writable for card ids explicitly passed to `registerTestCard`.
+- Cleanup proof: the suite's own `task-21-failure-cleanup.txt` only proves its own `RUN_PREFIX` is gone. Verified globally instead by querying board 116 (14 cards, 0 `[e2e-` prefixed) and board 113 (58 cards, 0 `[e2e-` prefixed) directly via the API.
+- Env vars for a standalone API check are `VITE_NC_URL` / `VITE_NC_USER` / `VITE_NC_PASS` from `.env.local` (not the `NEXTCLOUD_*` names one might guess).
+
+Verification: card-detail.spec.js 5/5 consecutive green; full E2E suite 3/3 green (15 passed); `npm run test` 132 passed (16 files).
+
+## F1 remediation (Oracle issues 3-7)
+
+- Svelte 5 component-local `$state` is invisible to a parent store. An in-progress
+  description lived only in `CardCoreEditor`, so `requestClose()` never saw it dirty
+  and Escape discarded it. Fix: report the pending state upward via an `onDraftChange`
+  prop fired from an `$effect`; the store gates close on `draftPending`.
+- Reusing one `state.error` for BOTH load failures and mutation failures made the
+  modal swap its whole body for the retry view after a failed save, stranding edits.
+  Split into `error` (load) + `actionError`/`actionScope` (mutation), rendered inline
+  by the owning section. Without the scope the same message rendered 3x.
+- Cleanup residue must be measured WHILE the card still exists. Checking after the
+  card delete makes the assertion vacuous - a mutant that skipped every comment
+  delete still passed until residue was captured per-card inside `cleanupCard`.
+- Mutation testing caught a bad test of my own: an "assign by keyboard" test passed
+  only because of a trailing `fireEvent.click`. jsdom does not translate keyDown on a
+  button into activation; assert the element is a native focusable BUTTON instead of
+  faking a keypress.
+- Live QA confirmed what unit tests cannot: forced 500 on PUT leaves exactly one
+  scoped alert, editor body intact, and board 116 unchanged at 14 cards.

@@ -19,3 +19,7 @@
 - Failed core saves roll back the exact pre-save card snapshot but retain the draft changes and specific error so the UI can offer retry/discard instead of silently losing user input.
 
 2026-07-31: Threaded the detail store's existing `{ boardId, stackId, cardId }` target into card and attachment helpers instead of re-deriving route context or adding short-route fallbacks.
+
+2026-07-31 T21: The live card-detail CRUD suite creates only `[e2e-<uuid>]` cards and enforces afterAll cleanup by querying all stacks for that run prefix, deleting any survivors, writing `.sisyphus/evidence/card-detail/task-21-failure-cleanup.txt`, and asserting zero leftovers.
+
+2026-07-31 T21 correction: `e2e/fixtures.js` owns card-scoped mutation safety. Specs register newly created board-116 card ids; `guardedPage` also preloads existing board-116 card ids before observing app requests. No spec-level fetch monkeypatching is allowed.

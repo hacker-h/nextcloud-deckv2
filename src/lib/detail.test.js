@@ -312,6 +312,109 @@ describe('card detail store', () => {
     expect(removed).not.toHaveBeenCalled();
   });
 
+  it('keeps the card open and reports a failed unarchive as an action error', async () => {
+    const c = readyClient(card(77, { archived: true }));
+    const base = c.deck;
+    c.deck = vi.fn((path, options = {}) => {
+      if (path.endsWith('/unarchive')) {
+        throw new DeckError(500, JSON.stringify({ message: 'unarchive exploded' }), {
+          method: options.method,
+          path,
+          contentType: 'application/json',
+        });
+      }
+      return base(path, options);
+    });
+    const detail = createCardDetailStore(c, { currentUser: 'alice' });
+    await openReady(detail);
+
+    expect(await detail.unarchive()).toBe(false);
+
+    expect(detail.state.actionError).toBe('unarchive exploded');
+    expect(detail.state.actionScope).toBe('lifecycle');
+    expect(detail.state.error).toBeNull();
+    expect(detail.state.cardId).toBe(77);
+  });
+
+  it('keeps the card listed and open when a soft delete fails', async () => {
+    const c = readyClient(card(77, { title: 'Not deleted' }));
+    const base = c.deck;
+    c.deck = vi.fn((path, options = {}) => {
+      if (options.method === 'DELETE') {
+        throw new DeckError(403, JSON.stringify({ message: 'delete forbidden' }), {
+          method: options.method,
+          path,
+          contentType: 'application/json',
+        });
+      }
+      return base(path, options);
+    });
+    const removed = vi.fn();
+    const detail = createCardDetailStore(c, { currentUser: 'alice', onRemoveCard: removed });
+    await openReady(detail);
+
+    expect(await detail.softDelete()).toBe(false);
+
+    expect(detail.state.actionError).toBe('delete forbidden');
+    expect(detail.state.cardId).toBe(77);
+    expect(detail.state.card).toMatchObject({ title: 'Not deleted' });
+    expect(removed).not.toHaveBeenCalled();
+  });
+
+  it('reports a rejected label assignment without changing the card', async () => {
+    const c = readyClient(card(77, { labels: [] }));
+    const base = c.deck;
+    c.deck = vi.fn((path, options = {}) => {
+      if (path.endsWith('/assignLabel')) {
+        throw new DeckError(403, JSON.stringify({ message: 'label assign forbidden' }), {
+          method: options.method,
+          path,
+          contentType: 'application/json',
+        });
+      }
+      return base(path, options);
+    });
+    const detail = createCardDetailStore(c, { currentUser: 'alice' });
+    await openReady(detail);
+
+    await detail.assignLabel(520);
+
+    expect(detail.state.actionError).toBe('label assign forbidden');
+    expect(detail.state.actionScope).toBe('metadata');
+    expect(detail.state.error).toBeNull();
+    expect(detail.state.card.labels).toEqual([]);
+  });
+
+  // Deck answers an already-assigned label with a 400; that is the desired end
+  // state, so the store must reconcile instead of surfacing an action error.
+  it('treats an already-assigned label as success and reconciles from the server', async () => {
+    const c = readyClient(card(77, { labels: [] }));
+    const base = c.deck;
+    let reads = 0;
+    c.deck = vi.fn((path, options = {}) => {
+      if (path.endsWith('/assignLabel')) {
+        throw new DeckError(400, JSON.stringify({ message: 'label already assigned' }), {
+          method: options.method,
+          path,
+          contentType: 'application/json',
+        });
+      }
+      if (!options.method && path.endsWith('/cards/77')) {
+        reads += 1;
+        return Promise.resolve({ ok: true, data: card(77, { labels: [{ id: 520, title: 'Bug' }] }) });
+      }
+      return base(path, options);
+    });
+    const detail = createCardDetailStore(c, { currentUser: 'alice' });
+    await openReady(detail);
+
+    await detail.assignLabel(520);
+
+    expect(detail.state.actionError).toBeNull();
+    expect(reads).toBeGreaterThan(0);
+    expect(detail.state.card.labels).toEqual([{ id: 520, title: 'Bug' }]);
+  });
+
   it('republishes tile counters when a comment is added or removed', async () => {
     const c = readyClient(card(77, { commentsCount: 0, attachmentCount: 0 }));
     let posted = 0;
