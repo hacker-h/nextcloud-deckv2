@@ -1,4 +1,11 @@
-import { test, expect, TEST_BOARD_ID, TEST_STACKS, assertBoardScoped } from './fixtures.js';
+import {
+  test,
+  expect,
+  TEST_BOARD_ID,
+  TEST_STACKS,
+  assertBoardScoped,
+  registerTestCard,
+} from './fixtures.js';
 
 test.describe('smoke', () => {
   test('app loads the dedicated test board', async ({ guardedPage: page }) => {
@@ -33,6 +40,17 @@ test.describe('smoke', () => {
     // Reads are always allowed; only writes are board-scoped.
     expect(() => assertBoardScoped('GET', '/boards/113/stacks')).not.toThrow();
     expect(() => assertBoardScoped('PUT', `/boards/${TEST_BOARD_ID}/stacks/366/cards/1`)).not.toThrow();
+
+    // Comment URLs name no board, so an unknown card must never be writable.
+    const ocsComments = (id) => `/ocs/v2.php/apps/deck/api/v1.0/cards/${id}/comments`;
+    expect(() => assertBoardScoped('POST', ocsComments(10060))).toThrow();
+
+    registerTestCard(10193);
+    expect(() => assertBoardScoped('POST', ocsComments(10193))).not.toThrow();
+
+    // A board id smuggled into the query string is not a scoping claim.
+    const smuggled = `${ocsComments(10060)}?ref=/boards/${TEST_BOARD_ID}`;
+    expect(() => assertBoardScoped('POST', smuggled)).toThrow();
 
     await expect(deck.request('PUT', '/boards/113/stacks/1/cards/2', {})).rejects.toThrow(
       /Mutation target must be board 116/

@@ -137,4 +137,20 @@ describe('CardLifecycleMenu', () => {
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('Request failed with status 403');
   });
+
+  it('keeps the delete confirmation open and shows the error on a server failure', async () => {
+    const onDelete = vi.fn().mockResolvedValue(false);
+    setup({ onDelete, error: 'Request failed with status 500' });
+
+    await openMenu();
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Delete card' }));
+    await fireEvent.input(screen.getByLabelText('Confirm card title'), {
+      target: { value: 'Detail QA' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Delete card' }));
+
+    expect(onDelete).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('alertdialog')).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Request failed with status 500');
+  });
 });

@@ -118,3 +118,71 @@ describe('board store card reconciliation', () => {
     expect(store.state.stacks[0].cards).toHaveLength(2);
   });
 });
+
+describe('board store card moves', () => {
+  function movableStore(moveCard = vi.fn().mockResolvedValue({})) {
+    const client = { getStacks: vi.fn(), moveCard };
+    const store = createBoardStore(client);
+    store.state.stacks = [
+      {
+        id: 9,
+        title: 'Doing',
+        cards: [
+          { id: 10193, title: 'First', stackId: 9, order: 0, labels: [] },
+          { id: 10194, title: 'Second', stackId: 9, order: 1, labels: [] },
+        ],
+      },
+      { id: 10, title: 'Done', cards: [] },
+    ];
+    store.state.loading = false;
+    return { store, moveCard };
+  }
+
+  const idsIn = (store, stackId) =>
+    store.state.stacks.find((s) => s.id === stackId).cards.map((c) => c.id);
+
+  it('moves a card into the target stack and persists the new order', async () => {
+    const { store, moveCard } = movableStore();
+
+    await store.moveCards({ cardIds: [10193], toStackId: 10, index: 0, boardId: 116 });
+
+    expect(idsIn(store, 9)).toEqual([10194]);
+    expect(idsIn(store, 10)).toEqual([10193]);
+    expect(cardIn(store, 10, 10193).stackId).toBe(10);
+    expect(moveCard).toHaveBeenCalledTimes(1);
+    expect(moveCard.mock.calls[0][0]).toMatchObject({ toBoardId: 116, toStackId: 10 });
+  });
+
+  it('sends no request when a card is dropped back onto its own position', async () => {
+    const { store, moveCard } = movableStore();
+
+    await store.moveCards({ cardIds: [10193], toStackId: 9, index: 0, boardId: 116 });
+
+    expect(moveCard).not.toHaveBeenCalled();
+    expect(idsIn(store, 9)).toEqual([10193, 10194]);
+  });
+
+  it('restores stack membership and every mutated card field when a move fails', async () => {
+    const { store } = movableStore(vi.fn().mockRejectedValue(new Error('boom')));
+    // Card objects are shared with live state and their order/stackId are
+    // mutated in place, so a rollback that only restores the arrays would leave
+    // the card in the right slot carrying the wrong values.
+    const moved = cardIn(store, 9, 10193);
+    const before = { order: moved.order, stackId: moved.stackId };
+
+    await store.moveCards({ cardIds: [10193], toStackId: 10, index: 0, boardId: 116 });
+
+    expect(idsIn(store, 9)).toEqual([10193, 10194]);
+    expect(idsIn(store, 10)).toEqual([]);
+    expect(cardIn(store, 9, 10193).stackId).toBe(before.stackId);
+    expect(cardIn(store, 9, 10193).order).toBe(before.order);
+  });
+
+  it('settles pending back to zero after a failed move', async () => {
+    const { store } = movableStore(vi.fn().mockRejectedValue(new Error('boom')));
+
+    await store.moveCards({ cardIds: [10193], toStackId: 10, index: 0, boardId: 116 });
+
+    expect(store.state.pending).toBe(0);
+  });
+});

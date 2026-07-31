@@ -20,17 +20,50 @@ export const TEST_STACKS = { inbox: 366, todo: 367, doing: 368, blocked: 369, do
 
 const MUTATING = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
 
+// Card ids proven to live on the test board. Comment endpoints are addressed as
+// /cards/{id}/comments with no board segment anywhere in the URL, so they can
+// only be judged against a known-safe set rather than by reading the path.
+const safeCards = new Set();
+
+export function registerTestCard(cardId) {
+  safeCards.add(Number(cardId));
+}
+
+export function forgetTestCards() {
+  safeCards.clear();
+}
+
+export async function loadTestBoardCards(deck) {
+  const stacks = await deck.request('GET', `/boards/${TEST_BOARD_ID}/stacks`);
+  const list = Array.isArray(stacks) ? stacks : stacks.data;
+  for (const stack of list) for (const card of stack.cards ?? []) registerTestCard(card.id);
+}
+
 // Board 113 holds the user's real data. Any mutation that is not unambiguously
 // scoped to the throwaway test board is refused before it reaches the network.
 export function assertBoardScoped(method, url) {
   if (!MUTATING.has(method.toUpperCase())) return;
 
-  const boards = [...String(url).matchAll(/\/boards\/(\d+)/g)].map((m) => Number(m[1]));
-  if (!boards.length || boards.some((id) => id !== TEST_BOARD_ID)) {
+  const refuse = () => {
     throw new Error(
       `Mutation target must be board ${TEST_BOARD_ID}, refusing ${method} ${redact(url)}`
     );
+  };
+
+  // Read the path only. A board id appearing in the query string says nothing
+  // about what the request mutates and must never satisfy this check.
+  const path = String(url).split(/[?#]/)[0];
+
+  const boards = [...path.matchAll(/\/boards\/(\d+)/g)].map((m) => Number(m[1]));
+  if (boards.length) {
+    if (boards.some((id) => id !== TEST_BOARD_ID)) refuse();
+    return;
   }
+
+  const card = path.match(/\/cards\/(\d+)(?:\/|$)/);
+  if (card && safeCards.has(Number(card[1]))) return;
+
+  refuse();
 }
 
 export function redact(value) {
@@ -64,7 +97,9 @@ export const test = base.extend({
   },
 
   // Fails the test if the app itself ever mutates a non-test board.
-  guardedPage: async ({ page }, use) => {
+  guardedPage: async ({ page, deck }, use) => {
+    await loadTestBoardCards(deck);
+
     const violations = [];
     page.on('request', (req) => {
       try {
