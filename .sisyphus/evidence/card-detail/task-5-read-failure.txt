@@ -1,0 +1,11 @@
+Vitest assertion: updateCard(client, { boardId: 116, stackId: 9, cardId: 77, changes: { description: 'must not write' } }) receives this fresh-read response before any PUT.
+
+GET /index.php/apps/deck/api/v1.0/cards/77
+HTTP 500
+Content-Type: application/json
+
+{
+  "message": "fresh read failed"
+}
+
+Asserted outcome: the promise rejects with DeckError, status 500, and fetch mock calls filtered by method === 'PUT' have length 0.

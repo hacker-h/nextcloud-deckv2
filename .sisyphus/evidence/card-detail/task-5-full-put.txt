@@ -1,0 +1,22 @@
+Vitest assertion: updateCard(client, { boardId: 116, stackId: 9, cardId: 77, changes: { description: 'new description' } }) performs GET /cards/77 first, then PUT /boards/116/stacks/9/cards/77 with this JSON body.
+
+{
+  "id": 77,
+  "title": "Preserve me",
+  "type": "plain",
+  "owner": "alice",
+  "description": "new description",
+  "order": 65536,
+  "duedate": "2026-08-01T12:00:00+00:00",
+  "done": false,
+  "archived": false,
+  "deletedAt": 0,
+  "labels": [
+    {
+      "id": 4,
+      "title": "green"
+    }
+  ]
+}
+
+Asserted outcome: only description differs from the rich fresh GET fixture; title, type, owner uid, order, duedate, done, archived, deletedAt, and labels remain present in the replacement body.
