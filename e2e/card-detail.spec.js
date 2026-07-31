@@ -1,4 +1,4 @@
-import { test, expect, TEST_BOARD_ID, TEST_STACKS, registerTestCard } from './fixtures.js';
+import { test, expect, TEST_BOARD_ID, TEST_STACKS, registerTestCard, assertBoardScoped } from './fixtures.js';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -48,6 +48,7 @@ function normalizeAssigned(entry) {
 async function ocsRequest(method, path, body) {
   const e = env();
   const base = String(e.VITE_NC_URL).replace(/\/$/, '');
+  assertBoardScoped(method, `${base}/ocs/v2.php${path}`);
   const headers = {
     Authorization: 'Basic ' + Buffer.from(`${e.VITE_NC_USER}:${e.VITE_NC_PASS}`).toString('base64'),
     Accept: 'application/json',
@@ -212,11 +213,6 @@ test.describe('card detail live CRUD', () => {
       await page.getByLabel('Attach a file').setInputFiles(attachmentPath);
       await expect(dialog(page)).toContainText('detail-test.txt');
       await expect.poll(async () => (await getCard(deck, fixture.id)).commentsCount, { timeout: 15_000 }).toBe(1);
-
-      // Comment and attachment endpoints update the detail pane; a core save is
-      // what republishes the fresh card counters back onto the board tile.
-      await commitDue(page, fixture.id);
-      await expect.poll(async () => (await getCard(deck, fixture.id)).duedate).toBe(dueApi);
 
       await closeDialog(page);
       const tile = card(page, fixture.id);

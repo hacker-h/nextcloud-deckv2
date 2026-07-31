@@ -207,4 +207,77 @@ describe('card detail store', () => {
     expect(detail.state.loading).toBe(false);
     expect(detail.state.cardId).toBeNull();
   });
+
+  it('reads the card back when a label assignment returns no body', async () => {
+    const labelled = card(77, { labels: [{ id: 520, title: 'Abgeschlossen' }] });
+    let assigned = false;
+    const c = {
+      deck: vi.fn((path, options = {}) => {
+        if (path.includes('/attachments')) return Promise.resolve({ data: [] });
+        if (path.endsWith('/assignLabel')) {
+          assigned = true;
+          return Promise.resolve({ data: null });
+        }
+        return Promise.resolve({ data: assigned ? labelled : card(77, { labels: [] }) });
+      }),
+      ocs: vi.fn(() => Promise.resolve({ data: [] })),
+    };
+    const synced = vi.fn();
+    const detail = createCardDetailStore(c, { currentUser: 'alice', onCard: synced });
+    await openReady(detail);
+    synced.mockClear();
+
+    await detail.assignLabel(520);
+
+    expect(assigned).toBe(true);
+    expect(synced).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 77, labels: [expect.objectContaining({ id: 520 })] }),
+    );
+  });
+
+  it('republishes tile counters when a comment is added or removed', async () => {
+    const c = readyClient(card(77, { commentsCount: 0, attachmentCount: 0 }));
+    let posted = 0;
+    c.ocs = vi.fn((path, options = {}) => {
+      if ((options.method ?? 'GET') === 'POST') {
+        posted += 1;
+        return Promise.resolve({ data: { id: 501, message: 'hi', actorId: 'alice' } });
+      }
+      if ((options.method ?? 'GET') === 'DELETE') return Promise.resolve({ data: {} });
+      return Promise.resolve({ data: [] });
+    });
+    const synced = vi.fn();
+    const detail = createCardDetailStore(c, { currentUser: 'alice', onCard: synced });
+    await openReady(detail);
+    synced.mockClear();
+
+    const created = await detail.addComment('hi');
+
+    expect(posted).toBe(1);
+    expect(synced).toHaveBeenCalledWith(expect.objectContaining({ id: 77, commentsCount: 1 }));
+
+    synced.mockClear();
+    await detail.removeComment(created);
+
+    expect(synced).toHaveBeenCalledWith(expect.objectContaining({ id: 77, commentsCount: 0 }));
+  });
+
+  it('republishes tile counters when an attachment is uploaded', async () => {
+    const c = readyClient(card(77, { commentsCount: 0, attachmentCount: 0 }));
+    c.deck = vi.fn((path, options = {}) => {
+      if (path.includes('/attachments') && (options.method ?? 'GET') === 'POST') {
+        return Promise.resolve({ data: { id: 88, name: 'detail-test.txt', type: 'deck_file' } });
+      }
+      if (path.includes('/attachments')) return Promise.resolve({ data: [] });
+      return Promise.resolve({ data: card(77, { commentsCount: 0, attachmentCount: 0 }) });
+    });
+    const synced = vi.fn();
+    const detail = createCardDetailStore(c, { currentUser: 'alice', onCard: synced });
+    await openReady(detail);
+    synced.mockClear();
+
+    await detail.addAttachment(new File(['x'], 'detail-test.txt', { type: 'text/plain' }));
+
+    expect(synced).toHaveBeenCalledWith(expect.objectContaining({ id: 77, attachmentCount: 1 }));
+  });
 });

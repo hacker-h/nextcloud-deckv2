@@ -96,22 +96,30 @@ export const test = base.extend({
     await use({ request, boardId: TEST_BOARD_ID, stacks: TEST_STACKS });
   },
 
-  // Fails the test if the app itself ever mutates a non-test board.
   guardedPage: async ({ page, deck }, use) => {
     await loadTestBoardCards(deck);
-
-    const violations = [];
-    page.on('request', (req) => {
-      try {
-        assertBoardScoped(req.method(), req.url());
-      } catch (err) {
-        violations.push(err.message);
-      }
-    });
+    const violations = await installMutationGuard(page);
 
     await use(page);
     expect(violations, `unsafe mutations: ${violations.join('; ')}`).toEqual([]);
   },
 });
+
+// Aborts the request before it reaches the network if anything aims a mutation
+// at a board other than the test board. Returns the collected violations so the
+// caller decides whether they are a failure or the expected outcome.
+export async function installMutationGuard(page) {
+  const violations = [];
+  await page.route('**/*', (route, request) => {
+    try {
+      assertBoardScoped(request.method(), request.url());
+    } catch (err) {
+      violations.push(err.message);
+      return route.abort();
+    }
+    return route.continue();
+  });
+  return violations;
+}
 
 export { expect };

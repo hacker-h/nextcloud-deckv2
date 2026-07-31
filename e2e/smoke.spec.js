@@ -5,6 +5,7 @@ import {
   TEST_STACKS,
   assertBoardScoped,
   registerTestCard,
+  installMutationGuard,
 } from './fixtures.js';
 
 test.describe('smoke', () => {
@@ -58,5 +59,27 @@ test.describe('smoke', () => {
 
     const board = await deck.request('GET', `/boards/${TEST_BOARD_ID}`);
     expect(board.title).toBe('[deckv2] TEST BOARD - safe to break');
+  });
+
+  test('guard aborts a forbidden write before it reaches the network', async ({ page }) => {
+    const violations = await installMutationGuard(page);
+    await page.goto('/');
+    await expect(page.locator('[data-stack-id]').first()).toBeVisible({ timeout: 15_000 });
+
+    const blocked = await page.evaluate(async () => {
+      try {
+        await fetch('/index.php/apps/deck/api/v1.0/boards/113/stacks/1/cards/2', {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: 'must never be sent' }),
+        });
+        return false;
+      } catch {
+        return true;
+      }
+    });
+
+    expect(blocked).toBe(true);
+    expect(violations.join('; ')).toContain('refusing PUT');
   });
 });

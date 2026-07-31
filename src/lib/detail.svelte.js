@@ -176,18 +176,24 @@ export function createCardDetailStore(
     return r.data;
   }
 
-  async function label(action, labelId) {
-    const r = await action(client, target(), labelId);
-    if (r.ok && r.card) applyCard(r.card);
-    if (!r.ok) s.error = r.message;
+  // Deck answers the assign/remove verbs with an empty body, so the updated
+  // card has to be read back before the tile can show the change.
+  async function reconcile(r) {
+    if (!r.ok) {
+      s.error = r.message;
+      return r;
+    }
+    if (r.card) applyCard(r.card);
+    else await refreshCard();
     return r;
   }
 
+  async function label(action, labelId) {
+    return reconcile(await action(client, target(), labelId));
+  }
+
   async function user(action, userId, type) {
-    const r = await action(client, target(), userId, type);
-    if (r.ok && r.card) applyCard(r.card);
-    if (!r.ok) s.error = r.message;
-    return r;
+    return reconcile(await action(client, target(), userId, type));
   }
 
   // Lifecycle actions only touch the board once the server has confirmed them:
@@ -233,14 +239,29 @@ export function createCardDetailStore(
     }
   }
 
+  // Comment and attachment endpoints return only their own entity, so the tile
+  // counters would stay stale until some unrelated core save republished the
+  // card. Derive them from the lists we just updated instead.
+  function publishCounts() {
+    if (!s.card) return;
+    s.card = {
+      ...s.card,
+      commentsCount: s.comments.length,
+      attachmentCount: s.attachments.filter((a) => !a.deletedAt).length,
+    };
+    onCard(s.card);
+  }
+
   async function reloadComments() {
     s.comments = await listComments(client, s.cardId, currentUser);
+    publishCounts();
     return s.comments;
   }
 
   async function addComment(message, options) {
     const c = await createComment(client, s.cardId, message, { ...options, currentUser });
     s.comments = [...s.comments, c];
+    publishCounts();
     return c;
   }
 
@@ -253,17 +274,20 @@ export function createCardDetailStore(
   async function removeComment(comment) {
     const id = await deleteComment(client, s.cardId, comment, currentUser);
     s.comments = s.comments.filter((x) => x.id !== id);
+    publishCounts();
     return id;
   }
 
   async function reloadAttachments() {
     s.attachments = await listAttachments(client, target());
+    publishCounts();
     return s.attachments;
   }
 
   async function addAttachment(file, options) {
     const a = await uploadAttachment(client, target(), file, options);
     s.attachments = [...s.attachments, a];
+    publishCounts();
     return a;
   }
 
@@ -276,12 +300,14 @@ export function createCardDetailStore(
   async function removeAttachment(attachmentId) {
     const id = await deleteAttachment(client, target(), attachmentId);
     s.attachments = s.attachments.filter((x) => x.id !== id);
+    publishCounts();
     return id;
   }
 
   async function restoreDeletedAttachment(attachmentId) {
     const a = await restoreAttachment(client, target(), attachmentId);
     s.attachments = s.attachments.map((x) => (x.id === a.id ? a : x));
+    publishCounts();
     return a;
   }
 
