@@ -25,7 +25,7 @@ export function createCardDetailStore(
     actionError: null,
     actionScope: null,
     dirty: false,
-    draftPending: false,
+    draftPending: null,
     saving: 0,
     closeBlocked: false,
     draft: {},
@@ -69,7 +69,7 @@ export function createCardDetailStore(
     s.error = null;
     clearAction();
     s.dirty = false;
-    s.draftPending = false;
+    s.draftPending = null;
     s.closeBlocked = false;
     s.draft = {};
     s.loading = true;
@@ -100,14 +100,16 @@ export function createCardDetailStore(
     s.closeBlocked = false;
   }
 
-  function setDraftPending(pending) {
-    s.draftPending = pending;
+  // Held apart from `s.draft` so an abandoned in-editor draft is not committed by
+  // an unrelated save; it is merged in only when the user chooses to save.
+  function setDraftPending(changes) {
+    s.draftPending = changes ?? null;
   }
 
   function discardDraft() {
     s.draft = {};
     s.dirty = false;
-    s.draftPending = false;
+    s.draftPending = null;
     s.closeBlocked = false;
     clearAction();
   }
@@ -139,14 +141,15 @@ export function createCardDetailStore(
     s.error = null;
     clearAction();
     s.dirty = false;
+    s.draftPending = null;
     s.closeBlocked = false;
     s.draft = {};
     return true;
   }
 
-  function saveCore(changes = s.draft) {
+  function saveCore(changes) {
     const queuedTarget = target();
-    const queuedChanges = { ...changes };
+    const queuedChanges = { ...s.draftPending, ...(changes ?? s.draft) };
     const snapshot = s.card ? { ...s.card } : null;
     const cardId = queuedTarget.cardId;
     if (!cardId || !Object.keys(queuedChanges).length) return Promise.resolve(null);
@@ -163,7 +166,7 @@ export function createCardDetailStore(
           applyCard(r.data);
           s.draft = {};
           s.dirty = false;
-          s.draftPending = false;
+          s.draftPending = null;
           s.closeBlocked = false;
           clearAction();
         } else {

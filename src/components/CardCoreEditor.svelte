@@ -9,9 +9,10 @@
   const description = $derived(card?.description ?? '');
 
   // The description is explicit save/cancel, so an in-progress edit only exists
-  // locally. Report it so closing the modal can offer to keep it.
+  // locally. Report the pending text (not just a flag) so closing the modal can
+  // actually persist it when the user picks Save.
   $effect(() => {
-    onDraftChange(editingDesc && descDraft !== description);
+    onDraftChange(editingDesc && descDraft !== description ? { description: descDraft } : null);
   });
   const titleInvalid = $derived(editingTitle && !titleDraft.trim());
 

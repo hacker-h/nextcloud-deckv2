@@ -192,25 +192,45 @@ describe('card detail store', () => {
     const detail = createCardDetailStore(readyClient());
     await openReady(detail);
 
-    detail.setDraftPending(true);
+    detail.setDraftPending({ description: 'typed but unsaved' });
 
     expect(detail.requestClose()).toBe(false);
     expect(detail.state.cardId).toBe(77);
     expect(detail.state.closeBlocked).toBe(true);
 
-    detail.setDraftPending(false);
+    detail.setDraftPending(null);
     expect(detail.requestClose()).toBe(true);
     expect(detail.state.cardId).toBeNull();
+  });
+
+  it('persists an in-editor description when close prompts for a save', async () => {
+    const puts = [];
+    const c = readyClient(card(77, { description: '' }));
+    const base = c.deck;
+    c.deck = vi.fn((path, options = {}) => {
+      if (options.method === 'PUT') puts.push(options.body ?? options);
+      return base(path, options);
+    });
+    const detail = createCardDetailStore(c, { currentUser: 'alice' });
+    await openReady(detail);
+
+    detail.setDraftPending({ description: 'typed but never committed' });
+    expect(detail.requestClose()).toBe(false);
+
+    await detail.saveCore();
+
+    expect(puts).toHaveLength(1);
+    expect(puts[0]).toMatchObject({ description: 'typed but never committed' });
   });
 
   it('clears a pending draft flag when a new card is opened', async () => {
     const detail = createCardDetailStore(readyClient());
     await openReady(detail);
-    detail.setDraftPending(true);
+    detail.setDraftPending({ description: 'typed but unsaved' });
 
     await openReady(detail);
 
-    expect(detail.state.draftPending).toBe(false);
+    expect(detail.state.draftPending).toBeNull();
     expect(detail.requestClose()).toBe(true);
   });
 

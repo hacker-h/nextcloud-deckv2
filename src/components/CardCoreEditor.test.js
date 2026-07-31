@@ -102,11 +102,11 @@ describe('CardCoreEditor', () => {
       target: { value: 'unsaved work' },
     });
 
-    expect(onDraftChange).toHaveBeenLastCalledWith(true);
+    expect(onDraftChange).toHaveBeenLastCalledWith({ description: 'unsaved work' });
 
     await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
 
-    expect(onDraftChange).toHaveBeenLastCalledWith(false);
+    expect(onDraftChange).toHaveBeenLastCalledWith(null);
   });
 
   it('reports no pending draft when an edit is cancelled', async () => {
@@ -119,7 +119,7 @@ describe('CardCoreEditor', () => {
     });
     await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    expect(onDraftChange).toHaveBeenLastCalledWith(false);
+    expect(onDraftChange).toHaveBeenLastCalledWith(null);
   });
 
   it('preserves line breaks and renders markup as text, never HTML', () => {
