@@ -25,7 +25,7 @@
   // card straight back into the board state.
   const detail = createCardDetailStore(client, {
     currentUser: import.meta.env.VITE_NC_USER,
-    onCard: (card) => board.replaceCard?.(card),
+    onCard: (card) => board.replaceCard(card),
   });
 
   let boards = $state([]);

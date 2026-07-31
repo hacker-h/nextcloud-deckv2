@@ -38,6 +38,27 @@ export function createBoardStore(client) {
     }
   }
 
+  // Detail edits patch a single tile in place. Stack membership and order are
+  // owned by drag-and-drop, so they are deliberately preserved here even when
+  // the detail response carries different values.
+  function replaceCard(card) {
+    if (!card) return null;
+    const found = findCard(card.id);
+    if (!found) return null;
+
+    const { stack, index, card: previous } = found;
+    stack.cards[index] = { ...card, stackId: previous.stackId, order: previous.order };
+    return stack.cards[index];
+  }
+
+  function removeCard(cardId) {
+    const found = findCard(cardId);
+    if (!found) return null;
+
+    found.stack.cards.splice(found.index, 1);
+    return found.card;
+  }
+
   function failToast(failed) {
     s.toast = {
       text:
@@ -151,5 +172,5 @@ export function createBoardStore(client) {
     }
   }
 
-  return { state: s, load, moveCards };
+  return { state: s, load, moveCards, replaceCard, removeCard };
 }
