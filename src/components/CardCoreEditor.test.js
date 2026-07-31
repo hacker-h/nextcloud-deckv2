@@ -93,6 +93,35 @@ describe('CardCoreEditor', () => {
     expect(onSave).toHaveBeenCalledWith({ description: 'Line 1\nLine 2' });
   });
 
+  it('reports an unsaved description draft so the modal can block closing', async () => {
+    const onDraftChange = vi.fn();
+    setup({ onDraftChange });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a more detailed description' }));
+    await fireEvent.input(screen.getByLabelText('Card description'), {
+      target: { value: 'unsaved work' },
+    });
+
+    expect(onDraftChange).toHaveBeenLastCalledWith(true);
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(onDraftChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('reports no pending draft when an edit is cancelled', async () => {
+    const onDraftChange = vi.fn();
+    setup({ onDraftChange });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Add a more detailed description' }));
+    await fireEvent.input(screen.getByLabelText('Card description'), {
+      target: { value: 'abandoned' },
+    });
+    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    expect(onDraftChange).toHaveBeenLastCalledWith(false);
+  });
+
   it('preserves line breaks and renders markup as text, never HTML', () => {
     setup({ card: { ...base, description: 'Line 1\n<b>not bold</b>' } });
 

@@ -158,7 +158,7 @@
       card={detail.state.card}
       loading={detail.state.loading}
       error={detail.state.error}
-      dirty={detail.state.dirty}
+      dirty={detail.state.dirty || detail.state.draftPending}
       onClose={detail.requestClose}
       onRetry={detail.refreshCard}
       onSave={detail.saveCore}
@@ -168,6 +168,7 @@
         <CardCoreEditor
           card={detail.state.card}
           error={detail.state.error}
+          onDraftChange={detail.setDraftPending}
           onSave={(changes) => {
             detail.editDraft(changes);
             return detail.saveCore();

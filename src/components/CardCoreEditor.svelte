@@ -1,5 +1,5 @@
 <script>
-  let { card, onSave, error = null } = $props();
+  let { card, onSave, onDraftChange = () => {}, error = null } = $props();
 
   let editingTitle = $state(false);
   let titleDraft = $state('');
@@ -7,6 +7,12 @@
   let descDraft = $state('');
 
   const description = $derived(card?.description ?? '');
+
+  // The description is explicit save/cancel, so an in-progress edit only exists
+  // locally. Report it so closing the modal can offer to keep it.
+  $effect(() => {
+    onDraftChange(editingDesc && descDraft !== description);
+  });
   const titleInvalid = $derived(editingTitle && !titleDraft.trim());
 
   const due = $derived(toLocalInput(card?.duedate));

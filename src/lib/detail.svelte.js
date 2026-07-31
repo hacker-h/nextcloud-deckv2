@@ -23,6 +23,7 @@ export function createCardDetailStore(
     loading: false,
     error: null,
     dirty: false,
+    draftPending: false,
     saving: 0,
     closeBlocked: false,
     draft: {},
@@ -55,6 +56,7 @@ export function createCardDetailStore(
     s.attachments = [];
     s.error = null;
     s.dirty = false;
+    s.draftPending = false;
     s.closeBlocked = false;
     s.draft = {};
     s.loading = true;
@@ -85,15 +87,20 @@ export function createCardDetailStore(
     s.closeBlocked = false;
   }
 
+  function setDraftPending(pending) {
+    s.draftPending = pending;
+  }
+
   function discardDraft() {
     s.draft = {};
     s.dirty = false;
+    s.draftPending = false;
     s.closeBlocked = false;
     s.error = null;
   }
 
   function requestClose() {
-    if (s.dirty || s.saving > 0) {
+    if (s.dirty || s.draftPending || s.saving > 0) {
       s.closeBlocked = true;
       return false;
     }
@@ -102,7 +109,7 @@ export function createCardDetailStore(
   }
 
   function close({ discard = false } = {}) {
-    if (!discard && (s.dirty || s.saving > 0)) {
+    if (!discard && (s.dirty || s.draftPending || s.saving > 0)) {
       s.closeBlocked = true;
       return false;
     }
@@ -142,6 +149,7 @@ export function createCardDetailStore(
           applyCard(r.data);
           s.draft = {};
           s.dirty = false;
+          s.draftPending = false;
           s.closeBlocked = false;
         } else {
           onCard(r.data);
@@ -317,6 +325,7 @@ export function createCardDetailStore(
     close,
     requestClose,
     editDraft,
+    setDraftPending,
     discardDraft,
     saveCore,
     refreshCard,

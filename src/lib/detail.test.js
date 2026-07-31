@@ -184,6 +184,32 @@ describe('card detail store', () => {
     expect(detail.state.cardId).toBeNull();
   });
 
+  it('blocks close while a description edit is still open in the editor', async () => {
+    const detail = createCardDetailStore(readyClient());
+    await openReady(detail);
+
+    detail.setDraftPending(true);
+
+    expect(detail.requestClose()).toBe(false);
+    expect(detail.state.cardId).toBe(77);
+    expect(detail.state.closeBlocked).toBe(true);
+
+    detail.setDraftPending(false);
+    expect(detail.requestClose()).toBe(true);
+    expect(detail.state.cardId).toBeNull();
+  });
+
+  it('clears a pending draft flag when a new card is opened', async () => {
+    const detail = createCardDetailStore(readyClient());
+    await openReady(detail);
+    detail.setDraftPending(true);
+
+    await openReady(detail);
+
+    expect(detail.state.draftPending).toBe(false);
+    expect(detail.requestClose()).toBe(true);
+  });
+
   it('aborts in-flight detail requests on close', async () => {
     const pending = deferred();
     const signals = [];
