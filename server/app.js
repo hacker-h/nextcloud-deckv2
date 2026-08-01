@@ -1,0 +1,158 @@
+import { clearSessionCookie, parseCookies, requestIsHttps, sessionCookie } from './cookies.js';
+
+const HOP_BY_HOP = new Set(['connection', 'content-length', 'host', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade']);
+const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+
+export function createApp({ ncUrl, sessions, nextcloud }) {
+  const flows = new Map();
+  const nc = nextcloud;
+
+  return async function app(req, res) {
+    try {
+      const url = requestUrl(req);
+      if (req.method === 'POST' && url.pathname === '/auth/login') return authLogin(req, res, nc, flows);
+      if (req.method === 'GET' && url.pathname === '/auth/poll') return authPoll(req, res, nc, flows, sessions);
+      if (req.method === 'POST' && url.pathname === '/auth/logout') return authLogout(req, res, ncUrl, sessions);
+      if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, sessions);
+      if (url.pathname.startsWith('/api/')) return proxy(req, res, url, ncUrl, sessions);
+      return send(res, 404, { error: 'not found' });
+    } catch (err) {
+      if (err.name === 'LoginExpiredError') return send(res, 410, { error: 'login expired' });
+      return send(res, 500, { error: 'server error' });
+    }
+  };
+}
+
+async function authLogin(req, res, nc, flows) {
+  const flow = await nc.initLogin();
+  flows.clear();
+  flows.set('current', { token: flow.pollToken, createdAt: Date.now() });
+  return send(res, 200, { loginUrl: flow.loginUrl });
+}
+
+async function authPoll(req, res, nc, flows, sessions) {
+  const flow = flows.get('current');
+  if (!flow) return send(res, 410, { error: 'login expired' });
+  const result = await nc.poll(flow.token, { createdAt: flow.createdAt });
+  if (!result) return empty(res, 204);
+  flows.delete('current');
+  const sid = sessions.create(result.appPassword, result.loginName);
+  res.setHeader('Set-Cookie', sessionCookie(sid, { secure: requestIsHttps(req) }));
+  return send(res, 200, { user: result.loginName });
+}
+
+async function authLogout(req, res, ncUrl, sessions) {
+  const session = sessionFrom(req, sessions);
+  if (session) {
+    sessions.destroy(session.sid);
+    await revoke(ncUrl, session).catch(() => {});
+  }
+  res.setHeader('Set-Cookie', clearSessionCookie({ secure: requestIsHttps(req) }));
+  return empty(res, 204);
+}
+
+function authMe(req, res, sessions) {
+  const session = sessionFrom(req, sessions);
+  if (!session) return send(res, 401, { error: 'unauthenticated' });
+  sessions.touch(session.sid);
+  return send(res, 200, { user: session.user });
+}
+
+async function proxy(req, res, url, ncUrl, sessions) {
+  const session = sessionFrom(req, sessions);
+  if (!session) return send(res, 401, { error: 'unauthenticated' });
+  if (!originAllowed(req)) return send(res, 403, { error: 'forbidden' });
+
+  const target = targetPath(url);
+  if (!target.allowed) return send(res, 403, { error: 'forbidden' });
+
+  const headers = forwardHeaders(req.headers);
+  headers.authorization = `Basic ${Buffer.from(`${session.user}:${session.appPassword}`).toString('base64')}`;
+  headers['accept-encoding'] = 'identity';
+  if (target.ocs) headers['ocs-apirequest'] = 'true';
+
+  const upstream = await fetch(`${ncUrl}${target.path}${url.search}`, {
+    method: req.method,
+    headers,
+    body: ['GET', 'HEAD'].includes(req.method) ? undefined : await requestBody(req),
+    duplex: ['GET', 'HEAD'].includes(req.method) ? undefined : 'half',
+  });
+
+  res.writeHead(upstream.status, responseHeaders(upstream.headers));
+  if (upstream.body) {
+    for await (const chunk of upstream.body) res.write(Buffer.from(chunk));
+  }
+  res.end();
+}
+
+function targetPath(url) {
+  const decoded = decodeURIComponent(url.pathname);
+  const normalized = new URL(decoded, 'http://local').pathname;
+  if (normalized.startsWith('/api/deck/')) {
+    return { allowed: true, ocs: false, path: `/index.php/apps/deck/api/v1.0${normalized.slice('/api/deck'.length)}` };
+  }
+  if (normalized.startsWith('/api/ocs/')) {
+    const rest = normalized.slice('/api/ocs'.length);
+    if (/^\/apps\/deck\/api\/v1\.0\/cards\/\d+\/comments(?:\/\d+)?$/.test(rest)) {
+      return { allowed: true, ocs: true, path: `/ocs/v2.php${rest}` };
+    }
+    if (rest === '/apps/activity/api/v2/activity/filter') return { allowed: true, ocs: true, path: `/ocs/v2.php${rest}` };
+  }
+  return { allowed: false };
+}
+
+function originAllowed(req) {
+  if (!MUTATING.has(req.method)) return true;
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  return origin === requestUrl(req).origin;
+}
+
+async function revoke(ncUrl, session) {
+  const auth = Buffer.from(`${session.user}:${session.appPassword}`).toString('base64');
+  await fetch(`${ncUrl}/ocs/v2.php/core/apppassword`, { method: 'DELETE', headers: { Authorization: `Basic ${auth}`, 'OCS-APIRequest': 'true' } });
+}
+
+function sessionFrom(req, sessions) {
+  const sid = parseCookies(req.headers.cookie).sid;
+  return sid ? sessions.get(sid) : null;
+}
+
+function requestUrl(req) {
+  const proto = requestIsHttps(req) ? 'https' : 'http';
+  return new URL(req.url, `${proto}://${req.headers.host}`);
+}
+
+function forwardHeaders(headers) {
+  const out = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (!HOP_BY_HOP.has(key.toLowerCase()) && key.toLowerCase() !== 'cookie' && key.toLowerCase() !== 'origin') out[key] = value;
+  }
+  return out;
+}
+
+function responseHeaders(headers) {
+  const out = {};
+  for (const [key, value] of headers.entries()) if (!HOP_BY_HOP.has(key.toLowerCase())) out[key] = value;
+  return out;
+}
+
+function requestBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', (chunk) => chunks.push(chunk));
+    req.on('error', reject);
+    req.on('end', () => resolve(Buffer.concat(chunks)));
+  });
+}
+
+function send(res, status, body) {
+  const json = JSON.stringify(body);
+  res.writeHead(status, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(json) });
+  res.end(json);
+}
+
+function empty(res, status) {
+  res.writeHead(status);
+  res.end();
+}
