@@ -1,17 +1,19 @@
-import { clearSessionCookie, parseCookies, requestIsHttps, sessionCookie } from './cookies.js';
+import { randomBytes } from 'node:crypto';
+import { clearFlowCookie, clearSessionCookie, flowCookie, parseCookies, requestIsHttps, sessionCookie } from './cookies.js';
 
 const HOP_BY_HOP = new Set(['connection', 'content-length', 'host', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade']);
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+const FLOW_TTL_MS = 20 * 60 * 1000;
 
-export function createApp({ ncUrl, sessions, nextcloud }) {
+export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now() }) {
   const flows = new Map();
   const nc = nextcloud;
 
   return async function app(req, res) {
     try {
       const url = requestUrl(req);
-      if (req.method === 'POST' && url.pathname === '/auth/login') return authLogin(req, res, nc, flows);
-      if (req.method === 'GET' && url.pathname === '/auth/poll') return authPoll(req, res, nc, flows, sessions);
+      if (req.method === 'POST' && url.pathname === '/auth/login') return authLogin(req, res, nc, flows, now);
+      if (req.method === 'GET' && url.pathname === '/auth/poll') return authPoll(req, res, nc, flows, sessions, now);
       if (req.method === 'POST' && url.pathname === '/auth/logout') return authLogout(req, res, ncUrl, sessions);
       if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, sessions);
       if (url.pathname.startsWith('/api/')) return proxy(req, res, url, ncUrl, sessions);
@@ -23,22 +25,42 @@ export function createApp({ ncUrl, sessions, nextcloud }) {
   };
 }
 
-async function authLogin(req, res, nc, flows) {
+async function authLogin(req, res, nc, flows, now) {
+  evictExpiredFlows(flows, now());
   const flow = await nc.initLogin();
-  flows.clear();
-  flows.set('current', { token: flow.pollToken, createdAt: Date.now() });
+  const flowId = randomBytes(32).toString('base64url');
+  flows.set(flowId, { token: flow.pollToken, createdAt: now() });
+  res.setHeader('Set-Cookie', flowCookie(flowId, { secure: requestIsHttps(req) }));
   return send(res, 200, { loginUrl: flow.loginUrl });
 }
 
-async function authPoll(req, res, nc, flows, sessions) {
-  const flow = flows.get('current');
-  if (!flow) return send(res, 410, { error: 'login expired' });
+async function authPoll(req, res, nc, flows, sessions, now) {
+  const secure = requestIsHttps(req);
+  const currentTime = now();
+  evictExpiredFlows(flows, currentTime);
+  const flowId = parseCookies(req.headers.cookie).flow;
+  const flow = flowId ? flows.get(flowId) : null;
+  if (!flow) {
+    res.setHeader('Set-Cookie', clearFlowCookie({ secure }));
+    return send(res, 410, { error: 'login expired' });
+  }
+  if (currentTime - flow.createdAt > FLOW_TTL_MS) {
+    flows.delete(flowId);
+    res.setHeader('Set-Cookie', clearFlowCookie({ secure }));
+    return send(res, 410, { error: 'login expired' });
+  }
   const result = await nc.poll(flow.token, { createdAt: flow.createdAt });
   if (!result) return empty(res, 204);
-  flows.delete('current');
+  flows.delete(flowId);
   const sid = sessions.create(result.appPassword, result.loginName);
-  res.setHeader('Set-Cookie', sessionCookie(sid, { secure: requestIsHttps(req) }));
+  res.setHeader('Set-Cookie', [sessionCookie(sid, { secure }), clearFlowCookie({ secure })]);
   return send(res, 200, { user: result.loginName });
+}
+
+function evictExpiredFlows(flows, now) {
+  for (const [id, flow] of flows) {
+    if (now - flow.createdAt > FLOW_TTL_MS) flows.delete(id);
+  }
 }
 
 async function authLogout(req, res, ncUrl, sessions) {

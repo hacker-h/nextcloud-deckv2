@@ -40,9 +40,17 @@ async function upstream(handler) {
   });
 }
 
-async function appUrl({ nextcloud, sessions, client } = {}) {
-  const handler = createApp({ ncUrl: nextcloud, sessions, nextcloud: client });
+async function appUrl({ nextcloud, sessions, client, now } = {}) {
+  const handler = createApp({ ncUrl: nextcloud, sessions, nextcloud: client, now });
   return listen(handler);
+}
+
+function cookieNamed(response, name) {
+  return response.headers
+    .get('set-cookie')
+    ?.split(/,(?=\s*[^;=]+=)/)
+    .find((cookie) => cookie.trim().startsWith(`${name}=`))
+    ?.split(';')[0];
 }
 
 describe('auth routes', () => {
@@ -57,12 +65,15 @@ describe('auth routes', () => {
 
     const login = await fetch(`${base}/auth/login`, { method: 'POST' });
     expect(await login.json()).toEqual({ loginUrl: 'https://nc/login' });
+    const flowCookie = cookieNamed(login, 'flow');
+    expect(flowCookie).toBeTruthy();
 
-    expect((await fetch(`${base}/auth/poll`)).status).toBe(204);
-    const poll = await fetch(`${base}/auth/poll`);
+    expect((await fetch(`${base}/auth/poll`, { headers: { cookie: flowCookie } })).status).toBe(204);
+    const poll = await fetch(`${base}/auth/poll`, { headers: { cookie: flowCookie } });
     expect(poll.status).toBe(200);
     expect(poll.headers.get('set-cookie')).toMatch(/HttpOnly; SameSite=Strict; Path=\//);
-    const cookie = poll.headers.get('set-cookie').split(';')[0];
+    expect(poll.headers.get('set-cookie')).toContain('flow=;');
+    const cookie = cookieNamed(poll, 'sid');
 
     await expect((await fetch(`${base}/auth/me`, { headers: { cookie } })).json()).resolves.toEqual({ user: 'alice' });
     const logout = await fetch(`${base}/auth/logout`, { method: 'POST', headers: { cookie, Origin: base } });
@@ -72,12 +83,89 @@ describe('auth routes', () => {
     expect(upstreamCalls.at(-1).headers.authorization).toMatch(/^Basic /);
   });
 
-  it('replaces a pending flow on double-login and rejects unauthenticated me', async () => {
-    const client = { initLogin: vi.fn().mockResolvedValueOnce({ loginUrl: 'one', pollToken: 'one' }).mockResolvedValueOnce({ loginUrl: 'two', pollToken: 'two' }) };
+  it('keeps double-login flows independent and rejects unauthenticated me', async () => {
+    const client = {
+      initLogin: vi.fn().mockResolvedValueOnce({ loginUrl: 'one', pollToken: 'one' }).mockResolvedValueOnce({ loginUrl: 'two', pollToken: 'two' }),
+      poll: vi.fn(async (token) => ({ appPassword: `${token}-password`, loginName: token })),
+    };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions: makeSessions(), client });
+    const firstLogin = await fetch(`${base}/auth/login`, { method: 'POST' });
+    const secondLogin = await fetch(`${base}/auth/login`, { method: 'POST' });
+    expect(await secondLogin.json()).toEqual({ loginUrl: 'two' });
+    const firstPoll = await fetch(`${base}/auth/poll`, { headers: { cookie: cookieNamed(firstLogin, 'flow') } });
+    const secondPoll = await fetch(`${base}/auth/poll`, { headers: { cookie: cookieNamed(secondLogin, 'flow') } });
+    expect(await firstPoll.json()).toEqual({ user: 'one' });
+    expect(await secondPoll.json()).toEqual({ user: 'two' });
+    expect((await fetch(`${base}/auth/me`)).status).toBe(401);
+  });
+
+  it('does not let a second browser hijack another pending login by polling without a flow cookie', async () => {
+    const client = {
+      initLogin: vi.fn().mockResolvedValue({ loginUrl: 'https://nc/login', pollToken: 'alice-token' }),
+      poll: vi.fn().mockResolvedValue({ appPassword: 'alice-password', loginName: 'alice' }),
+    };
     const base = await appUrl({ nextcloud: 'https://nc.test', sessions: makeSessions(), client });
     await fetch(`${base}/auth/login`, { method: 'POST' });
-    expect(await (await fetch(`${base}/auth/login`, { method: 'POST' })).json()).toEqual({ loginUrl: 'two' });
-    expect((await fetch(`${base}/auth/me`)).status).toBe(401);
+
+    const malloryPoll = await fetch(`${base}/auth/poll`);
+
+    expect(malloryPoll.status).not.toBe(200);
+    expect(cookieNamed(malloryPoll, 'sid')).toBeUndefined();
+  });
+
+  it('supports concurrent pending flows without account swaps', async () => {
+    const client = {
+      initLogin: vi
+        .fn()
+        .mockResolvedValueOnce({ loginUrl: 'https://nc/alice', pollToken: 'alice-token' })
+        .mockResolvedValueOnce({ loginUrl: 'https://nc/bob', pollToken: 'bob-token' }),
+      poll: vi.fn(async (token) => ({ appPassword: `${token}-password`, loginName: token.replace('-token', '') })),
+    };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions: makeSessions(), client });
+    const aliceFlow = cookieNamed(await fetch(`${base}/auth/login`, { method: 'POST' }), 'flow');
+    const bobFlow = cookieNamed(await fetch(`${base}/auth/login`, { method: 'POST' }), 'flow');
+
+    const alicePoll = await fetch(`${base}/auth/poll`, { headers: { cookie: aliceFlow } });
+    const bobPoll = await fetch(`${base}/auth/poll`, { headers: { cookie: bobFlow } });
+
+    expect(await alicePoll.json()).toEqual({ user: 'alice' });
+    expect(await bobPoll.json()).toEqual({ user: 'bob' });
+    expect(client.poll).toHaveBeenCalledWith('alice-token', expect.any(Object));
+    expect(client.poll).toHaveBeenCalledWith('bob-token', expect.any(Object));
+  });
+
+  it('rejects forged flow ids without minting a session', async () => {
+    const client = {
+      initLogin: vi.fn().mockResolvedValue({ loginUrl: 'https://nc/login', pollToken: 'real-token' }),
+      poll: vi.fn().mockResolvedValue({ appPassword: 'alice-password', loginName: 'alice' }),
+    };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions: makeSessions(), client });
+    await fetch(`${base}/auth/login`, { method: 'POST' });
+
+    const forged = await fetch(`${base}/auth/poll`, { headers: { cookie: 'flow=forged' } });
+
+    expect(forged.status).toBe(410);
+    expect(cookieNamed(forged, 'sid')).toBeUndefined();
+    expect(client.poll).not.toHaveBeenCalled();
+  });
+
+  it('expires pending flows after the Login Flow v2 lifetime and evicts them', async () => {
+    let now = 1_000;
+    const client = {
+      initLogin: vi.fn().mockResolvedValue({ loginUrl: 'https://nc/login', pollToken: 'old-token' }),
+      poll: vi.fn().mockResolvedValue({ appPassword: 'alice-password', loginName: 'alice' }),
+    };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions: makeSessions(), client, now: () => now });
+    const flowCookie = cookieNamed(await fetch(`${base}/auth/login`, { method: 'POST' }), 'flow');
+    now += 20 * 60 * 1000 + 1;
+
+    const expired = await fetch(`${base}/auth/poll`, { headers: { cookie: flowCookie } });
+    const evicted = await fetch(`${base}/auth/poll`, { headers: { cookie: flowCookie } });
+
+    expect(expired.status).toBe(410);
+    expect(evicted.status).toBe(410);
+    expect(cookieNamed(expired, 'sid')).toBeUndefined();
+    expect(client.poll).not.toHaveBeenCalled();
   });
 });
 

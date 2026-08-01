@@ -14,8 +14,16 @@ export function sessionCookie(sid, { secure = false } = {}) {
   return cookie('sid', sid, ['HttpOnly', 'SameSite=Strict', 'Path=/', secure && 'Secure']);
 }
 
+export function flowCookie(flowId, { secure = false } = {}) {
+  return cookie('flow', flowId, ['HttpOnly', 'SameSite=Strict', 'Path=/', secure && 'Secure']);
+}
+
 export function clearSessionCookie({ secure = false } = {}) {
   return cookie('sid', '', ['HttpOnly', 'SameSite=Strict', 'Path=/', 'Max-Age=0', secure && 'Secure']);
+}
+
+export function clearFlowCookie({ secure = false } = {}) {
+  return cookie('flow', '', ['HttpOnly', 'SameSite=Strict', 'Path=/', 'Max-Age=0', secure && 'Secure']);
 }
 
 export function requestIsHttps(req) {
