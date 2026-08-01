@@ -184,7 +184,7 @@ work, and it is a prerequisite for the deferred multi-server feature.
 
 ### Wave 1 — Backend foundation (T0–T7)
 
-- [ ] **T0 — Split the vitest environment** (blocks every server test)
+- [x] **T0 — Split the vitest environment** (blocks every server test)
   `vite.config.js` currently pins `environment: 'jsdom'` globally. The backend
   is plain Node; server code inheriting a DOM global takes wrong branches under
   test (anything checking `window`/`document` silently sees a browser). Convert
@@ -193,31 +193,31 @@ work, and it is a prerequisite for the deferred multi-server feature.
   *Verification*: existing 164 client tests still pass; a server test asserting
   `typeof window === 'undefined'` passes.
 
-- [ ] **T1 — Server skeleton and config**
+- [x] **T1 — Server skeleton and config**
   `server/config.js`: read `NC_URL`, `PORT`, `SESSION_SECRET` from env.
   Validate `NC_URL` is a well-formed absolute http(s) URL at boot; exit with a
   readable error if missing. Warn loudly when `SESSION_SECRET` is absent.
   *Tests*: valid/invalid/missing URL, trailing-slash normalisation, warning path.
 
-- [ ] **T2 — Session store with encrypted tokens**
+- [x] **T2 — Session store with encrypted tokens**
   `server/sessions.js`: `create(token, user)`, `get(sid)`, `destroy(sid)`,
   `touch(sid)`. 256-bit random ids via `crypto.randomBytes`. `aes-256-gcm` at
   rest (D4). Idle expiry (30 days), file-backed JSON, atomic writes.
   *Tests*: round-trip, tampered ciphertext rejected, expiry, unknown sid,
   ids are unique and high-entropy, file survives reload.
 
-- [ ] **T3 — Cookie helpers**
+- [x] **T3 — Cookie helpers**
   Parse/serialise cookies; `HttpOnly`, `SameSite=Strict`, `Path=/`, `Secure`
   when the request is HTTPS. *Tests*: attribute correctness, no attribute
   injection from crafted values, clearing on sign-out.
 
-- [ ] **T4 — Login Flow v2 client**
+- [x] **T4 — Login Flow v2 client**
   `server/nextcloud.js`: `initLogin()` → `{ loginUrl, pollToken }`;
   `poll(token)` → `null` while 404 (pending), `{ appPassword, loginName }` on
   200. Enforce the flow's own 20-minute lifetime; surface expiry distinctly
   from failure. *Tests*: pending (404), success, expiry, network error, malformed body.
 
-- [ ] **T5 — Auth routes**
+- [x] **T5 — Auth routes**
   `POST /auth/login` → `{ loginUrl }` + a short-lived pending-flow record.
   `GET  /auth/poll` → 204 pending / 200 + `Set-Cookie` on success / 410 expired.
   `POST /auth/logout` → destroy session, clear cookie, **and revoke the app
@@ -227,7 +227,7 @@ work, and it is a prerequisite for the deferred multi-server feature.
   *Tests*: full happy path, poll-before-approval, double-login, logout revokes
   upstream, `/auth/me` unauthenticated.
 
-- [ ] **T6 — Authenticated proxy**
+- [x] **T6 — Authenticated proxy**
   `ALL /api/deck/*` and `/api/ocs/*` → inject `Authorization: Basic`, forward
   method/body/headers, stream response. Preserve `ETag` / `If-None-Match` and
   **304 pass-through** — the store's conditional-read path depends on it.
@@ -235,7 +235,7 @@ work, and it is a prerequisite for the deferred multi-server feature.
   *Tests*: header injection, 304 preserved, ETag round-trip, binary
   (attachment) pass-through, upstream 403 surfaces as 403, unauthenticated → 401.
 
-- [ ] **T7 — Proxy allowlist + CSRF guard** (D3, D5)
+- [x] **T7 — Proxy allowlist + CSRF guard** (D3, D5)
   Reject non-allowlisted upstream paths with 403. Reject mutating requests
   whose `Origin` mismatches. *Tests*: allowed paths pass; `/ocs/v2.php/cloud/users`
   blocked; path-traversal (`/api/deck/../../ocs/...`) blocked after
