@@ -19,7 +19,7 @@
 >
 > **Estimated Effort**: Large
 > **Parallel Execution**: YES — 3 waves
-> **Critical Path**: T1 → T2 → T4 → T6 → T9 → T13 → T15 → F1–F3
+> **Critical Path**: T0 → T1 → T2 → T4 → T6 → T9 → T13 → T15 → F1–F3
 
 ---
 
@@ -182,7 +182,16 @@ work, and it is a prerequisite for the deferred multi-server feature.
 
 ## Tasks
 
-### Wave 1 — Backend foundation (T1–T7)
+### Wave 1 — Backend foundation (T0–T7)
+
+- [ ] **T0 — Split the vitest environment** (blocks every server test)
+  `vite.config.js` currently pins `environment: 'jsdom'` globally. The backend
+  is plain Node; server code inheriting a DOM global takes wrong branches under
+  test (anything checking `window`/`document` silently sees a browser). Convert
+  `test` to a `workspace` with two projects: `client` (jsdom, existing
+  `include`, `setupFiles`) and `server` (node, `include: ['server/**/*.test.js']`).
+  *Verification*: existing 164 client tests still pass; a server test asserting
+  `typeof window === 'undefined'` passes.
 
 - [ ] **T1 — Server skeleton and config**
   `server/config.js`: read `NC_URL`, `PORT`, `SESSION_SECRET` from env.
