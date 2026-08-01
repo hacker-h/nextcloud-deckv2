@@ -248,4 +248,52 @@ test.describe('interaction', () => {
     expect(requests.movePuts).toHaveLength(0);
     await expectApiStack(deck, TEST_STACKS.inbox);
   });
+
+  // Trello sizes a lane to its cards. Stretching the visible lane to the board
+  // height was one way to make the space below droppable, but it looks wrong;
+  // the hit-test must carry that instead. Both halves are asserted together so
+  // neither can be "fixed" by reintroducing the other's bug.
+  test('a short lane stays short yet still accepts a drop below its last card', async ({ guardedPage: page }) => {
+    await openTestBoard(page);
+
+    const viewport = page.viewportSize().height;
+    const lanes = await page.$$eval('[data-stack-id]', (els) =>
+      els.map((el) => {
+        const r = el.getBoundingClientRect();
+        const cards = [...el.querySelectorAll('[data-card-id]')];
+        const last = cards.at(-1)?.getBoundingClientRect();
+        return {
+          id: el.dataset.stackId,
+          count: cards.length,
+          bottom: r.bottom,
+          lastCardBottom: last ? last.bottom : r.top,
+        };
+      })
+    );
+
+    const short = lanes.filter((l) => l.count > 0 && l.count < 6);
+    expect(short.length).toBeGreaterThan(0);
+    for (const lane of short) {
+      expect(lane.bottom).toBeLessThan(viewport - 60);
+      expect(lane.bottom - lane.lastCardBottom).toBeLessThan(120);
+    }
+
+    const target = short.slice().sort((a, b) => a.lastCardBottom - b.lastCardBottom)[0];
+    const source = page.locator(`[data-stack-id="${TEST_STACKS.inbox}"] [data-card-id]`).first();
+    const sourceId = await source.getAttribute('data-card-id');
+    const sb = await source.boundingBox();
+    const tb = await page.locator(`[data-stack-id="${target.id}"]`).boundingBox();
+
+    await page.mouse.move(sb.x + sb.width / 2, sb.y + sb.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(tb.x + tb.width / 2, target.lastCardBottom + 150, { steps: 20 });
+
+    await expect(page.locator(`[data-stack-id="${target.id}"].over`)).toBeVisible();
+    expect(await page.locator('.placeholder').count()).toBe(1);
+
+    await page.mouse.up();
+    await expect(
+      page.locator(`[data-stack-id="${target.id}"] [data-card-id="${sourceId}"]`)
+    ).toBeVisible({ timeout: 15_000 });
+  });
 });

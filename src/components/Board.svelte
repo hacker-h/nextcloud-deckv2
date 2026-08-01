@@ -25,7 +25,8 @@
     overflow-x: auto;
     overflow-y: hidden;
   }
-  /* Lanes run the full height so the empty space under a short list is still
-     that lane's drop target; each scrolls internally once its cards overflow. */
-  .board > :global(.stack) { height: 100%; max-height: 100%; }
+  /* Trello sizes a lane to its cards, so a short list stays short. The empty
+     space below it is still a drop target - that is handled by hit-testing in
+     dnd.svelte.js, deliberately not by stretching the visible lane. */
+  .board > :global(.stack) { max-height: 100%; }
 </style>

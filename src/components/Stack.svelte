@@ -134,8 +134,5 @@
     /* min-height:0 is required, or the flex child refuses to shrink and the
        whole board scrolls instead of the stack. */
     min-height: 0;
-    /* Claim the leftover height so a short list still presents a drop target
-       below its last card, matching the hit-testing in dnd.svelte.js. */
-    flex: 1 1 auto;
   }
 </style>
