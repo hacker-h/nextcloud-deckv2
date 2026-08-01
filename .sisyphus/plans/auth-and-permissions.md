@@ -6,21 +6,20 @@
 > "Sign in with Nextcloud" flow (Login Flow v2), so every user of the instance
 > sees their own boards with their own permissions. Add a backend proxy that
 > holds tokens server-side, so no credential ever reaches the browser bundle.
-> Surface each board's access level (read / edit / manage) in the UI and make
-> read-only boards visible-but-safe instead of hidden.
+> Surface each board's access level (Edit / Manage) in the UI. Read-only boards
+> stay filtered out as today; showing them is deferred to the roadmap.
 >
 > **Deliverables**:
 > - `server/` — Node backend: login flow, session store, authenticated proxy
 > - Per-user sessions; no `VITE_NC_*` credentials in the client bundle
 > - Login screen + sign-out, "stay signed in" across server restarts
-> - Board access badges (View / Edit / Manage) and permission-aware UI
-> - Read-only boards shown instead of filtered out, with mutations disabled
-> - `ROADMAP.md` documenting deferred multi-server support
+> - Board access badges (Edit / Manage) on the boards the user can already see
+> - `ROADMAP.md` documenting deferred multi-server and read-only board support
 > - Vitest unit/component tests + Playwright E2E against the live instance
 >
 > **Estimated Effort**: Large
 > **Parallel Execution**: YES — 3 waves
-> **Critical Path**: T1 → T2 → T4 → T6 → T9 → T13 → T16 → F1–F3
+> **Critical Path**: T1 → T2 → T4 → T6 → T9 → T13 → T15 → F1–F3
 
 ---
 
@@ -43,7 +42,9 @@ plus a visualization of whether they have read or manage access to a board.
   bundle). Multiple simultaneous servers are **explicitly deferred** to roadmap.
 - "Keep me signed in" per server — deferred as a multi-server feature, but
   basic session persistence across restarts is in scope now.
-- The board list must visualize the access level (read vs. manage).
+- The board list must visualize the access level. Since read-only boards stay
+  hidden (D6), that means **Edit vs. Manage** among the boards actually shown.
+- Read-only board support is **deferred to roadmap** at the user's request.
 - Polish level: this replaces the user's daily Deck usage.
 
 ### Research Findings (verified live against the instance)
@@ -60,8 +61,9 @@ plus a visualization of whether they have read or manage access to a board.
 | Current token is a real app password | matches `XXXXX-XXXXX-XXXXX-XXXXX-XXXXX` |
 | Current token is inlined into `dist/` | `password:"<redacted>"` found verbatim in `dist/assets/index-*.js` |
 | App password is full-account scope | authenticates against `/ocs/v2.php/cloud/user` → 200 |
-| Read-only boards exist live | board **109** "Antonia Aufgaben": `PERMISSION_EDIT:false`, `shared:1` |
-| Read-only boards are currently hidden | `src/lib/deck.js:128` filters with `canEdit` |
+| Read-only boards exist live (deferred, see D6) | board **109** "Antonia Aufgaben": `PERMISSION_EDIT:false`, `shared:1` |
+| Read-only boards are hidden today, and stay hidden | `src/lib/deck.js:128` filters with `canEdit` |
+| Every board the user can see is Manage-level today | all **16** live editable boards return `PERMISSION_MANAGE:true` |
 
 ### Why a backend is mandatory (not a style choice)
 
@@ -145,11 +147,24 @@ uses. An authenticated user must not be able to drive arbitrary Nextcloud
 endpoints (e.g. user provisioning) through our server just because our token
 is full-account scope. Path is matched against an explicit allowlist.
 
-### D6 — Show read-only boards instead of hiding them
+### D6 — Keep hiding read-only boards for now
 
-`deck.js:128` currently drops non-editable boards. That was correct when every
-mutation 403'd with no UI feedback; it is wrong once we visualize access.
-Read-only boards become visible, badged **View**, with drag/edit disabled.
+`deck.js:128` drops non-editable boards, and that behaviour is **unchanged** by
+this plan. Showing them requires a read-only mode through the whole UI (drag
+suppression, read-only editors, read-only card detail) — a large surface for a
+case the user does not currently hit. Deferred to ROADMAP.
+
+Consequence: badges here distinguish **Edit** from **Manage** among boards the
+user can already act on. The permission model (T13) still computes `view` so
+the deferred work is a UI addition, not a model change.
+
+**Caveat worth confirming before building Wave 3**: on the live instance all 16
+visible boards return `PERMISSION_MANAGE:true` (measured). The only non-manage board is
+109, which D6 hides. So today the badge would read "Manage" on every board —
+correct, but carrying no information. It becomes useful as soon as someone
+shares an edit-but-not-manage board, or once read-only boards are shown. If the
+user wants visible value now, read-only support (roadmap item 4) is the part
+that delivers it, and Wave 3 could shrink to just the T13 model.
 
 ### D7 — Permission derives from the server response, never from local state
 
@@ -250,57 +265,48 @@ work, and it is a prerequisite for the deferred multi-server feature.
   Header shows the signed-in user and a sign-out action.
   *Tests*: renders current user, calls `signOut`, returns to login.
 
-### Wave 3 — Permission visibility (T13–T17)
+### Wave 3 — Permission visibility (T13–T15)
 
 - [ ] **T13 — Permission model**
   `src/lib/permissions.js`: `accessLevel(board)` → `'view' | 'edit' | 'manage'`
   derived from `PERMISSION_MANAGE` / `PERMISSION_EDIT` / `PERMISSION_READ`;
-  `canEditBoard(board)`. Pure, no I/O (D7).
+  `canEditBoard(board)`. Pure, no I/O (D7). `'view'` is computed even though no
+  board reaching the UI currently has it (D6) — the deferred read-only work then
+  needs no model change.
   *Tests*: all four real permission shapes incl. live board 109's exact
   payload; missing/partial `permissions` degrades to `view`, never to `edit`.
 
-- [ ] **T14 — Stop hiding read-only boards** (D6)
-  `getBoards` filters archived/deleted only; `canEdit` no longer excludes.
-  *Tests*: read-only board present in the result; archived still excluded;
-  ordering unchanged.
+- [ ] **T14 — Access badge component**
+  `src/components/AccessBadge.svelte`: Edit / Manage (and `view`, unused for now
+  but covered). Distinguished by **icon + text**, not colour alone (a
+  colour-only cue fails for colour-blind users and in high-contrast mode).
+  `title` + `aria-label` spell out the meaning.
+  *Tests*: each level renders distinct text/icon/label; no colour-only encoding.
 
-- [ ] **T15 — Access badge component**
-  `src/components/AccessBadge.svelte`: View / Edit / Manage. Distinguished by
-  **icon + text**, not colour alone (a colour-only cue fails for colour-blind
-  users and in high-contrast mode). `title` + `aria-label` spell out the
-  meaning.
-  *Tests*: three levels render distinct text/icon/label; no colour-only encoding.
+- [ ] **T15 — Badge placement**
+  Badge in `BoardSwitcher` rows and in the board header, fed by `accessLevel`.
+  No behavioural change: every visible board remains editable (D6).
+  *Tests*: manage board shows Manage; edit-only board shows Edit; badge reflects
+  the server response rather than any cached or inferred value (D7).
 
-- [ ] **T16 — Permission-aware board UI**
-  Badge in `BoardSwitcher` rows and in the board header. On a `view` board:
-  drag disabled, editors read-only, card detail opens read-only, no add/delete
-  affordances. Wire through `Board` → `Stack` → `Card` → `dnd`.
-  *Tests*: view board renders no drag handles and no add controls; `dnd`
-  refuses to start on a read-only board; edit board unaffected.
+### Wave 4 — Dev/prod wiring, docs, migration (T16–T20)
 
-- [ ] **T17 — Read-only card detail**
-  `CardDetailModal` and its editors accept a `readOnly` flag: fields
-  non-editable, save/archive/delete hidden, comments respect Deck's rules.
-  *Tests*: read-only rendering per editor; no mutating call is reachable.
-
-### Wave 4 — Dev/prod wiring, docs, migration (T18–T22)
-
-- [ ] **T18 — Dev server integration**
+- [ ] **T16 — Dev server integration**
   Vite `server.proxy` sends `/auth` and `/api` to the backend; `npm run dev`
   runs both. *Verification*: full sign-in works at `localhost:5173`.
 
-- [ ] **T19 — Production serving**
+- [ ] **T17 — Production serving**
   Backend serves `dist/` for non-API routes with SPA fallback; `npm start`.
   *Verification*: build + serve + sign in + load a board on the prod path.
 
-- [ ] **T20 — Purge client credentials**
+- [ ] **T18 — Purge client credentials**
   Delete `VITE_NC_USER` / `VITE_NC_PASS` / `VITE_NC_URL` from client code and
   `.env.local`; document `NC_URL` / `SESSION_SECRET` / `PORT` in `.env.example`.
   *Verification (gate)*: **grep the built bundle for the app password and for
   `Basic ` — must be absent.** This is the check that proves the original
   vulnerability is gone; automate it as a test so it cannot regress.
 
-- [ ] **T21 — E2E fixtures under the new auth**
+- [ ] **T19 — E2E fixtures under the new auth**
   `e2e/fixtures.js` builds its own `Authorization` header from `.env.local`
   for direct Deck setup/teardown — that stays (it is test scaffolding, not the
   app). The browser-side flows must authenticate via a seeded session instead:
@@ -311,22 +317,34 @@ work, and it is a prerequisite for the deferred multi-server feature.
   *Tests*: guard recognises `/api/deck/boards/{id}` shapes; existing 17 E2E
   specs pass unchanged otherwise.
 
-- [ ] **T22 — `ROADMAP.md`**
+- [ ] **T20 — `ROADMAP.md`**
   Document the deferred features with the reasoning already established:
-  multi-server connections; user-supplied instance URL **and the SSRF guard it
-  requires** (HTTPS-only, reject private/link-local/loopback ranges, re-validate
-  after redirects to defeat DNS rebinding, optional operator allowlist);
-  per-server "keep me signed in"; session→instance binding so a token can never
-  be replayed against a different server.
+
+  1. **Multi-server connections** — connect several instances at once and mix
+     their boards in one view. Requires session→instance binding so a token can
+     never be replayed against a different server.
+  2. **User-supplied instance URL** — and the **SSRF guard it requires**:
+     HTTPS-only, reject private/link-local/loopback ranges, re-validate after
+     redirects to defeat DNS rebinding, optional operator allowlist. Without
+     this the backend becomes an open proxy into the deploying host's network.
+  3. **Per-server "keep me signed in"** toggles.
+  4. **Read-only board support** (D6) — show boards the user can only view,
+     badged **View**, instead of filtering them out at `deck.js:128`. Needs
+     read-only propagation through `Board` → `Stack` → `Card` → `dnd` (no drag),
+     read-only card detail and editors, and no add/archive/delete affordances.
+     The `accessLevel` model (T13) already returns `'view'`, so this is UI work
+     only. Live example to test against: board **109** "Antonia Aufgaben"
+     (`PERMISSION_EDIT:false`, `shared:1`).
 
 ### Final verification (F1–F3)
 
-- [ ] **F1 — Security review**: no credential in the bundle (automated, T20);
+- [ ] **F1 — Security review**: no credential in the bundle (automated, T18);
   cookie flags; CSRF; proxy allowlist incl. traversal; token encryption at
   rest; logout revokes upstream; no token in logs or error bodies.
 - [ ] **F2 — Multi-user proof**: sign in as the main user and as a second
-  account; confirm each sees only their own boards and that board 109 is
-  read-only for the user who lacks edit rights. Confirm sessions are isolated.
+  account; confirm each sees only their own boards and that sessions are
+  isolated (one user's sign-out does not affect the other). Board 109 must be
+  absent for the user who lacks edit rights, per D6.
 - [ ] **F3 — Full suite**: Vitest + Playwright + build green; manual Firefox
   pass on sign-in, board load, permission badges, and sign-out.
 
@@ -343,7 +361,7 @@ work, and it is a prerequisite for the deferred multi-server feature.
 | 304/ETag path breaks behind the proxy | Explicit pass-through tests (T6) |
 | Attachment downloads break (binary) | Binary pass-through test (T6) |
 | Permission UI drifts from server truth | Derive from response only (D7); server still enforces |
-| E2E mutation guard blinded by new URL shapes | Update `assertBoardScoped` for `/api/*` (T21) |
+| E2E mutation guard blinded by new URL shapes | Update `assertBoardScoped` for `/api/*` (T19) |
 | Existing token already leaked via `dist/` | Revoke and reissue — see below |
 
 ---
@@ -354,4 +372,4 @@ The current app token is inlined in `dist/assets/index-*.js`. `dist/` is
 gitignored and never committed, so if the build never left this machine the
 token is intact. **If it was ever served, copied, or shared, revoke it** in
 Nextcloud → Settings → Security → Devices & sessions and issue a fresh one.
-After this plan lands the token is only used by E2E scaffolding (T21).
+After this plan lands the token is only used by E2E scaffolding (T19).
