@@ -1,0 +1,3 @@
+2026-08-01 Wave 1:
+- Live proxy proof initially returned `401` when seeding the session file after server startup because `SessionStore` is in-memory after boot. Seed before boot or add explicit test-only session minting in later E2E work.
+- Live proxied `/api/deck/boards` returned 19 boards through raw proxy, while plan research mentioned 16 editable visible boards. This is not a Wave 1 backend failure: filtering/hiding read-only boards remains client-side in current `deck.js` and is untouched in Wave 1.
