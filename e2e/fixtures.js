@@ -1,9 +1,11 @@
 import { test as base, expect } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const E2E_SESSION_SECRET = 'nextcloud-deckv2-e2e-session-secret';
 
 function env() {
   const raw = readFileSync(resolve(root, '.env.local'), 'utf8');
@@ -52,7 +54,14 @@ export function assertBoardScoped(method, url) {
 
   // Read the path only. A board id appearing in the query string says nothing
   // about what the request mutates and must never satisfy this check.
-  const path = String(url).split(/[?#]/)[0];
+  const path = new URL(String(url), 'http://local').pathname;
+
+  if (
+    (method.toUpperCase() === 'POST' && ['/auth/login', '/auth/logout'].includes(path)) ||
+    (method.toUpperCase() === 'GET' && path === '/auth/poll')
+  ) {
+    return;
+  }
 
   const boards = [...path.matchAll(/\/boards\/(\d+)/g)].map((m) => Number(m[1]));
   if (boards.length) {
@@ -71,6 +80,30 @@ export function redact(value) {
 }
 
 export const test = base.extend({
+  context: async ({ context }, use) => {
+    const sid = execFileSync(process.execPath, [resolve(root, 'scripts/seed-session.js')], {
+      cwd: root,
+      env: { ...process.env, SESSION_SECRET: E2E_SESSION_SECRET },
+      encoding: 'utf8',
+    }).trim();
+
+    await context.addCookies([{
+      name: 'sid',
+      value: sid,
+      domain: 'localhost',
+      path: '/',
+      httpOnly: true,
+      sameSite: 'Strict',
+    }]);
+
+    const probe = await fetch('http://localhost:5173/auth/me', { headers: { Cookie: `sid=${sid}` } });
+    if (!probe.ok) {
+      throw new Error(`Seeded E2E session was rejected by the server (${probe.status}); verify Playwright webServer.env SESSION_SECRET matches scripts/seed-session.js.`);
+    }
+
+    await use(context);
+  },
+
   deck: async ({}, use) => {
     const e = env();
     const baseUrl = String(e.VITE_NC_URL).replace(/\/$/, '');

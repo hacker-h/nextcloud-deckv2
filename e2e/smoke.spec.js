@@ -41,6 +41,11 @@ test.describe('smoke', () => {
     // Reads are always allowed; only writes are board-scoped.
     expect(() => assertBoardScoped('GET', '/boards/113/stacks')).not.toThrow();
     expect(() => assertBoardScoped('PUT', `/boards/${TEST_BOARD_ID}/stacks/366/cards/1`)).not.toThrow();
+    expect(() => assertBoardScoped('PUT', `/api/deck/boards/${TEST_BOARD_ID}/stacks/366/cards/1`)).not.toThrow();
+    expect(() => assertBoardScoped('PUT', '/api/deck/boards/113/stacks/1/cards/2')).toThrow();
+    expect(() => assertBoardScoped('POST', '/auth/logout')).not.toThrow();
+    expect(() => assertBoardScoped('POST', '/auth/login')).not.toThrow();
+    expect(() => assertBoardScoped('GET', '/auth/poll')).not.toThrow();
 
     // Comment URLs name no board, so an unknown card must never be writable.
     const ocsComments = (id) => `/ocs/v2.php/apps/deck/api/v1.0/cards/${id}/comments`;
@@ -48,6 +53,7 @@ test.describe('smoke', () => {
 
     registerTestCard(10193);
     expect(() => assertBoardScoped('POST', ocsComments(10193))).not.toThrow();
+    expect(() => assertBoardScoped('POST', `/api/ocs/apps/deck/api/v1.0/cards/10193/comments`)).not.toThrow();
 
     // A board id smuggled into the query string is not a scoping claim.
     const smuggled = `${ocsComments(10060)}?ref=/boards/${TEST_BOARD_ID}`;
