@@ -40,23 +40,25 @@ async function settleUntil(assertion) {
 
 describe('auth store', () => {
   it('check() authenticates a signed-in user', async () => {
-    const fetch = vi.fn().mockResolvedValue(response(200, { user: 'alice' }));
+    const fetch = vi.fn().mockResolvedValue(response(200, { user: 'alice', instance: 'https://cloud.example.test' }));
     const auth = createAuthStore({ fetch });
 
     await auth.check();
 
     expect(auth.state.status).toBe('authenticated');
     expect(auth.state.user).toBe('alice');
+    expect(auth.state.instance).toBe('https://cloud.example.test');
   });
 
-  it('check() marks 401 as anonymous', async () => {
-    const fetch = vi.fn().mockResolvedValue(response(401, { error: 'unauthenticated' }));
+  it('check() marks 401 as anonymous and keeps the instance name', async () => {
+    const fetch = vi.fn().mockResolvedValue(response(401, { error: 'unauthenticated', instance: 'https://cloud.example.test' }));
     const auth = createAuthStore({ fetch });
 
     await auth.check();
 
     expect(auth.state.status).toBe('anonymous');
     expect(auth.state.user).toBeNull();
+    expect(auth.state.instance).toBe('https://cloud.example.test');
   });
 
   it('runs the full sign-in flow from pending polls to authenticated', async () => {
@@ -171,6 +173,20 @@ describe('auth store', () => {
     expect(auth.state.status).toBe('anonymous');
     expect(auth.state.user).toBeNull();
     expect(auth.state.error).toBe('offline');
+  });
+
+  it('handleUnauthorized() drops to anonymous without calling logout', () => {
+    const fetch = vi.fn();
+    const auth = createAuthStore({ fetch });
+    auth.state.status = 'authenticated';
+    auth.state.user = 'alice';
+
+    auth.handleUnauthorized();
+
+    expect(fetch).not.toHaveBeenCalled();
+    expect(auth.state.status).toBe('anonymous');
+    expect(auth.state.user).toBeNull();
+    expect(auth.state.error).toMatch(/session ended/i);
   });
 
   it('sends credentials: same-origin on every request', async () => {

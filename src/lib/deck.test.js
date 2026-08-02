@@ -107,6 +107,23 @@ describe('DeckClient transport', () => {
     await expect(client().deck('/boards')).rejects.toBeInstanceOf(DeckError);
   });
 
+  it('fires onUnauthorized exactly once for 401 and not for other errors', async () => {
+    const fetch = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(json({ message: 'unauthenticated' }, { status: 401 }))
+      .mockResolvedValueOnce(json({ message: 'forbidden' }, { status: 403 }))
+      .mockResolvedValueOnce(json({ message: 'broken' }, { status: 500 }));
+    const onUnauthorized = vi.fn();
+    const c = new DeckClient({ onUnauthorized });
+
+    await expect(c.deck('/boards')).rejects.toMatchObject({ status: 401 });
+    await expect(c.deck('/boards')).rejects.toMatchObject({ status: 403 });
+    await expect(c.deck('/boards')).rejects.toMatchObject({ status: 500 });
+
+    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(onUnauthorized).toHaveBeenCalledTimes(1);
+  });
+
   it('redacts an Authorization header echoed back in an upstream error body', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(
       new Response('proxy failed: Basic YWxpY2U6c2VjcmV0 and Bearer abc.def-ghi', {

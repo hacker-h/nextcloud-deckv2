@@ -99,7 +99,7 @@ describe('auth routes', () => {
     expect(poll.headers.get('set-cookie')).toContain('flow=;');
     const cookie = cookieNamed(poll, 'sid');
 
-    await expect((await fetch(`${base}/auth/me`, { headers: { cookie } })).json()).resolves.toEqual({ user: 'alice' });
+    await expect((await fetch(`${base}/auth/me`, { headers: { cookie } })).json()).resolves.toEqual({ user: 'alice', instance: revokeBase });
     const logout = await fetch(`${base}/auth/logout`, { method: 'POST', headers: { cookie, Origin: base } });
     expect(logout.status).toBe(204);
     expect(logout.headers.get('set-cookie')).toContain('Max-Age=0');
@@ -120,7 +120,9 @@ describe('auth routes', () => {
     const secondPoll = await fetch(`${base}/auth/poll`, { headers: { cookie: cookieNamed(secondLogin, 'flow') } });
     expect(await firstPoll.json()).toEqual({ user: 'one' });
     expect(await secondPoll.json()).toEqual({ user: 'two' });
-    expect((await fetch(`${base}/auth/me`)).status).toBe(401);
+    const me = await fetch(`${base}/auth/me`);
+    expect(me.status).toBe(401);
+    await expect(me.json()).resolves.toEqual({ error: 'unauthenticated', instance: 'https://nc.test' });
   });
 
   it('does not let a second browser hijack another pending login by polling without a flow cookie', async () => {

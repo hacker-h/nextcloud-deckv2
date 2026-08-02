@@ -14,15 +14,15 @@
   import CardAttachments from './CardAttachments.svelte';
   import CardLifecycleMenu from './CardLifecycleMenu.svelte';
 
-  let { currentUser, onSignOut = () => {} } = $props();
+  let { currentUser, onSignOut = () => {}, onUnauthorized = () => {} } = $props();
 
-  const client = new DeckClient();
+  const client = new DeckClient({ onUnauthorized: () => onUnauthorized() });
 
   const board = createBoardStore(client);
 
   // Detail saves must repaint the board tile, so the store pushes every fresh
   // card straight back into the board state.
-  // svelte-ignore state_referenced_locally -- temporary static env user until T11 wires auth state.
+  // svelte-ignore state_referenced_locally -- current user is captured for draft ownership checks in the detail store.
   const detail = createCardDetailStore(client, {
     currentUser,
     onCard: (card) => board.replaceCard(card),

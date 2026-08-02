@@ -8,6 +8,7 @@ export function createAuthStore({ fetch = globalThis.fetch, pollDelays = DEFAULT
     error: null,
     loginUrl: null,
     expired: false,
+    instance: null,
   });
 
   let pollToken = 0;
@@ -42,10 +43,13 @@ export function createAuthStore({ fetch = globalThis.fetch, pollDelays = DEFAULT
         const body = await response.json();
         s.status = 'authenticated';
         s.user = body.user;
+        s.instance = body.instance ?? s.instance;
         s.error = null;
         s.loginUrl = null;
         return body.user;
       }
+      const body = await response.json().catch(() => ({}));
+      s.instance = body.instance ?? s.instance;
       s.status = 'anonymous';
       clearAuthState();
       return null;
@@ -74,7 +78,8 @@ export function createAuthStore({ fetch = globalThis.fetch, pollDelays = DEFAULT
     const body = await response.json();
     s.status = 'pending';
     s.user = null;
-    s.loginUrl = body.loginUrl;
+      s.loginUrl = body.loginUrl;
+      s.instance = body.instance ?? s.instance;
     controller = new AbortController();
     const token = pollToken;
     poll(token, controller.signal);
@@ -149,5 +154,14 @@ export function createAuthStore({ fetch = globalThis.fetch, pollDelays = DEFAULT
     s.error = error;
   }
 
-  return { state: s, check, signIn, signOut, cancel };
+  function handleUnauthorized() {
+    clearPoll();
+    s.status = 'anonymous';
+    s.user = null;
+    s.loginUrl = null;
+    s.expired = false;
+    s.error = 'Your session ended. Please sign in again.';
+  }
+
+  return { state: s, check, signIn, signOut, cancel, handleUnauthorized };
 }

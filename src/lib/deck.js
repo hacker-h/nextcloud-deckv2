@@ -49,6 +49,12 @@ const canEdit = (b) => Boolean((b.permissions ?? {}).PERMISSION_EDIT);
 const byOrder = (a, b) => Number(a.order ?? 0) - Number(b.order ?? 0);
 
 export class DeckClient {
+  #onUnauthorized;
+
+  constructor({ onUnauthorized = () => {} } = {}) {
+    this.#onUnauthorized = onUnauthorized;
+  }
+
   deck(path, options = {}) {
     return this.#request(API, path, { ...options, ocs: false });
   }
@@ -98,6 +104,7 @@ export class DeckClient {
     // 304 has no body - must return before attempting to parse JSON.
     if (res.status === 304) return { notModified: true, etag };
     if (!res.ok) {
+      if (res.status === 401) this.#onUnauthorized();
       // Upstream error bodies may echo the Authorization header injected by the
       // proxy; redact any credential-looking value before surfacing the message.
       const text = redact(await res.text().catch(() => ''));

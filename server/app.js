@@ -29,7 +29,7 @@ export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now(), 
       if (req.method === 'POST' && url.pathname === '/auth/login') return authLogin(req, res, nc, flows, now);
       if (req.method === 'GET' && url.pathname === '/auth/poll') return authPoll(req, res, nc, flows, sessions, now);
       if (req.method === 'POST' && url.pathname === '/auth/logout') return authLogout(req, res, ncUrl, sessions);
-      if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, sessions);
+      if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, ncUrl, sessions);
       if (url.pathname === '/auth' || url.pathname.startsWith('/auth/')) return send(res, 404, { error: 'not found' });
       if (url.pathname.startsWith('/api/')) return proxy(req, res, url, ncUrl, sessions);
       if (['GET', 'HEAD'].includes(req.method)) return serveStatic(req, res, url, distDir);
@@ -146,11 +146,11 @@ async function authLogout(req, res, ncUrl, sessions) {
   return empty(res, 204);
 }
 
-function authMe(req, res, sessions) {
+function authMe(req, res, ncUrl, sessions) {
   const session = sessionFrom(req, sessions);
-  if (!session) return send(res, 401, { error: 'unauthenticated' });
+  if (!session) return send(res, 401, { error: 'unauthenticated', instance: ncUrl });
   sessions.touch(session.sid);
-  return send(res, 200, { user: session.user });
+  return send(res, 200, { user: session.user, instance: ncUrl });
 }
 
 async function proxy(req, res, url, ncUrl, sessions) {
