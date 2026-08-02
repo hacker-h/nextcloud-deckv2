@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -13,6 +13,7 @@ export class SessionStore {
     this.now = now;
     this.ttlMs = ttlMs;
     this.data = this.#load();
+    this.fileMtimeNs = this.#fileMtimeNs();
   }
 
   create(appPassword, user) {
@@ -29,7 +30,14 @@ export class SessionStore {
   }
 
   get(sid) {
-    const item = this.data.sessions[sid];
+    let item = this.data.sessions[sid];
+    if (!item) {
+      // E2E seeding can mint a session in a separate process after the server
+      // has booted. On a miss, reload only when the file mtime changed; this
+      // sees external writes without re-reading the JSON file for every bogus id.
+      this.#reloadIfChanged();
+      item = this.data.sessions[sid];
+    }
     if (!item) return null;
     if (this.now() - item.lastSeenAt > this.ttlMs) {
       this.destroy(sid);
@@ -79,10 +87,28 @@ export class SessionStore {
     }
   }
 
+  #reloadIfChanged() {
+    const mtime = this.#fileMtimeNs();
+    if (mtime === this.fileMtimeNs) return;
+    const fromDisk = this.#load();
+    this.fileMtimeNs = mtime;
+    this.data.sessions = { ...fromDisk.sessions, ...this.data.sessions };
+  }
+
+  #fileMtimeNs() {
+    try {
+      return statSync(this.filePath, { bigint: true }).mtimeNs;
+    } catch (err) {
+      if (err.code === 'ENOENT') return 0n;
+      throw err;
+    }
+  }
+
   #save() {
     mkdirSync(dirname(this.filePath), { recursive: true });
     const tmp = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
     writeFileSync(tmp, JSON.stringify(this.data, null, 2));
     renameSync(tmp, this.filePath);
+    this.fileMtimeNs = this.#fileMtimeNs();
   }
 }
