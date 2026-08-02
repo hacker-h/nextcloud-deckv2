@@ -14,7 +14,7 @@
   import CardAttachments from './CardAttachments.svelte';
   import CardLifecycleMenu from './CardLifecycleMenu.svelte';
 
-  let { currentUser } = $props();
+  let { currentUser, onSignOut = () => {} } = $props();
 
   const client = new DeckClient();
 
@@ -126,6 +126,13 @@
           {board.state.pending} saving…
         </span>
       {/if}
+      <!-- Plain text beats an avatar menu here: the topbar is dense, and one action
+        does not justify hiding the signed-in username behind another interaction. -->
+      <div class="account" title={`Signed in as ${currentUser}`} aria-label={`Signed in as ${currentUser}`}>
+        <span class="account-user">{currentUser}</span>
+        <span class="account-sep" aria-hidden="true">•</span>
+        <button class="signout" type="button" onclick={() => onSignOut()}>Sign out</button>
+      </div>
     </header>
 
     {#if error}
@@ -245,6 +252,40 @@
   }
   .stat { font-size: 12px; color: var(--text-dim); }
   .pending { font-size: 12px; color: var(--accent); }
+
+  .account {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    max-width: min(42vw, 320px);
+    margin-left: auto;
+    color: var(--text-dim);
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .account-user {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+  }
+
+  .account-sep { flex: 0 0 auto; color: var(--border); }
+
+  .signout {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+
+  .signout:hover { background: var(--card-bg-hover); color: var(--text); }
+  .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* Failures surface here rather than blocking the board (PLAN.md §4.1). */
   .toast {
