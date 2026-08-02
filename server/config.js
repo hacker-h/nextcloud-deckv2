@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { existsSync } from 'node:fs';
 
 export function loadConfig(env = process.env, log = console) {
   if (!env.NC_URL) throw new Error('NC_URL is required');
@@ -17,11 +18,15 @@ export function loadConfig(env = process.env, log = console) {
   const port = env.PORT ? Number(env.PORT) : 3000;
   if (!Number.isInteger(port) || port <= 0 || port > 65535) throw new Error('PORT must be a valid TCP port');
 
+  const sessionFile = env.SESSION_FILE || '.data/sessions.json';
   let sessionSecret;
   let sessionSecretIsEphemeral = false;
   if (env.SESSION_SECRET) {
     sessionSecret = createHash('sha256').update(env.SESSION_SECRET).digest();
   } else {
+    const allowEphemeral = env.NODE_ENV === 'development' || env.NODE_ENV === 'test';
+    if (!allowEphemeral) throw new Error('SESSION_SECRET is required outside development/test');
+    if (existsSync(sessionFile)) throw new Error('SESSION_SECRET is required when a persisted session file already exists');
     sessionSecret = randomBytes(32);
     sessionSecretIsEphemeral = true;
     log.warn('WARNING: SESSION_SECRET is missing; generated an ephemeral key and sessions will not survive restart.');
@@ -32,6 +37,6 @@ export function loadConfig(env = process.env, log = console) {
     port,
     sessionSecret,
     sessionSecretIsEphemeral,
-    sessionFile: env.SESSION_FILE || '.data/sessions.json',
+    sessionFile,
   };
 }

@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 
 const DAY = 24 * 60 * 60 * 1000;
@@ -79,6 +79,7 @@ export class SessionStore {
 
   #load() {
     try {
+      chmodSync(this.filePath, 0o600);
       const parsed = JSON.parse(readFileSync(this.filePath, 'utf8'));
       return { sessions: parsed.sessions ?? {} };
     } catch (err) {
@@ -105,10 +106,13 @@ export class SessionStore {
   }
 
   #save() {
-    mkdirSync(dirname(this.filePath), { recursive: true });
+    mkdirSync(dirname(this.filePath), { recursive: true, mode: 0o700 });
+    chmodSync(dirname(this.filePath), 0o700);
     const tmp = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
-    writeFileSync(tmp, JSON.stringify(this.data, null, 2));
+    writeFileSync(tmp, JSON.stringify(this.data, null, 2), { mode: 0o600 });
+    chmodSync(tmp, 0o600);
     renameSync(tmp, this.filePath);
+    chmodSync(this.filePath, 0o600);
     this.fileMtimeNs = this.#fileMtimeNs();
   }
 }

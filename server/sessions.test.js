@@ -1,6 +1,6 @@
-import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { SessionStore } from './sessions.js';
 
@@ -17,6 +17,14 @@ describe('SessionStore', () => {
     const sid = sessions.create('app-password', 'alice');
     expect(sessions.get(sid)).toEqual({ sid, appPassword: 'app-password', user: 'alice' });
     expect(readFileSync(sessions.filePath, 'utf8')).not.toContain('app-password');
+  });
+
+  it('stores the session directory and file with owner-only permissions', () => {
+    const sessions = store();
+    sessions.create('app-password', 'alice');
+
+    expect(statSync(dirname(sessions.filePath)).mode & 0o777).toBe(0o700);
+    expect(statSync(sessions.filePath).mode & 0o777).toBe(0o600);
   });
 
   it('survives reload from disk', () => {
