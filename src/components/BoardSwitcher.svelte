@@ -1,4 +1,7 @@
 <script>
+  import AccessBadge from './AccessBadge.svelte';
+  import { accessLevel } from '../lib/permissions.js';
+
   let { boards, current, onselect } = $props();
 
   let open = $state(false);
@@ -57,6 +60,7 @@
             >
               <span class="swatch" style="background:#{board.color}"></span>
               <span class="label">{board.title}</span>
+              <span class="access"><AccessBadge level={accessLevel(board)} /></span>
             </button>
           </li>
         {:else}
@@ -153,7 +157,8 @@
   .item.active { color: var(--accent); font-weight: 600; }
 
   .swatch { flex: 0 0 auto; width: 10px; height: 10px; border-radius: 3px; }
-  .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .access { flex: 0 0 auto; margin-left: auto; }
 
   .none { padding: 8px; color: var(--text-dim); font-size: 13px; }
 </style>

@@ -5,8 +5,10 @@
   import { getBoardAssignmentOptions } from '../lib/assignments.js';
   import { downloadAttachment } from '../lib/attachments.js';
   import { touch, sortByMru } from '../lib/mru.js';
+  import { accessLevel } from '../lib/permissions.js';
   import Board from './Board.svelte';
   import BoardSwitcher from './BoardSwitcher.svelte';
+  import AccessBadge from './AccessBadge.svelte';
   import CardDetailModal from './CardDetailModal.svelte';
   import CardCoreEditor from './CardCoreEditor.svelte';
   import CardMetadataEditor from './CardMetadataEditor.svelte';
@@ -118,6 +120,9 @@
   <div class="main">
     <header class="topbar">
       <BoardSwitcher {boards} {current} onselect={openBoard} />
+      {#if current}
+        <span class="current-access"><AccessBadge level={accessLevel(current)} /></span>
+      {/if}
       {#if !loading && !error}
         <span class="stat">{stacks.length} lists · {cardCount} cards</span>
       {/if}
@@ -251,6 +256,7 @@
     border-bottom: 1px solid rgba(255, 255, 255, .09);
   }
   .stat { font-size: 12px; color: var(--text-dim); }
+  .current-access { flex: 0 0 auto; }
   .pending { font-size: 12px; color: var(--accent); }
 
   .account {
