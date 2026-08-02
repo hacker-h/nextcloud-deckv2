@@ -244,7 +244,7 @@ work, and it is a prerequisite for the deferred multi-server feature.
 
 ### Wave 2 — Client auth integration (T8–T12)
 
-- [ ] **T8 — `DeckClient` drops credentials**
+- [x] **T8 — `DeckClient` drops credentials**
   Constructor takes no username/password; base becomes `/api/deck` and
   `/api/ocs`; `credentials: 'omit'` → `'same-origin'`. Delete the `#auth`
   field and the `Basic` construction (`deck.js:52-57`). Keep `redact()` —
@@ -252,31 +252,31 @@ work, and it is a prerequisite for the deferred multi-server feature.
   *Tests*: existing `deck.test.js` suite adapted; assert no `Authorization`
   header is ever set client-side; assert 401 surfaces as an auth error.
 
-- [ ] **T9 — Auth store**
+- [x] **T9 — Auth store**
   `src/lib/auth.svelte.js`: `state.user`, `state.status`
   (`checking|anonymous|pending|authenticated`), `signIn()`, `poll()`,
   `signOut()`. Poll with backoff, stop on expiry, cancel on unmount.
   *Tests*: state transitions, backoff, expiry, cancellation, sign-out clears.
 
-- [ ] **T10 — Login screen**
+- [x] **T10 — Login screen**
   `src/components/LoginScreen.svelte`: instance name, "Sign in with Nextcloud",
   opens the flow URL in a new tab, shows waiting state with a cancel, plus a
   clear expiry message and retry. Accessible (focus management, live region).
   *Tests*: renders, click starts flow, waiting state, expiry copy, retry.
 
-- [ ] **T11 — App gating and session expiry**
+- [x] **T11 — App gating and session expiry**
   `App.svelte` renders `LoginScreen` when anonymous, board UI when
   authenticated, and a neutral splash while checking. A 401 from any request
   drops to the login screen without losing unsaved work where avoidable.
   *Tests*: gating per state; mid-session 401 redirects to login.
 
-- [ ] **T12 — Sign-out control**
+- [x] **T12 — Sign-out control**
   Header shows the signed-in user and a sign-out action.
   *Tests*: renders current user, calls `signOut`, returns to login.
 
 ### Wave 3 — Permission visibility (T13–T15)
 
-- [ ] **T13 — Permission model**
+- [x] **T13 — Permission model**
   `src/lib/permissions.js`: `accessLevel(board)` → `'view' | 'edit' | 'manage'`
   derived from `PERMISSION_MANAGE` / `PERMISSION_EDIT` / `PERMISSION_READ`;
   `canEditBoard(board)`. Pure, no I/O (D7). `'view'` is computed even though no
@@ -285,14 +285,14 @@ work, and it is a prerequisite for the deferred multi-server feature.
   *Tests*: all four real permission shapes incl. live board 109's exact
   payload; missing/partial `permissions` degrades to `view`, never to `edit`.
 
-- [ ] **T14 — Access badge component**
+- [x] **T14 — Access badge component**
   `src/components/AccessBadge.svelte`: Edit / Manage (and `view`, unused for now
   but covered). Distinguished by **icon + text**, not colour alone (a
   colour-only cue fails for colour-blind users and in high-contrast mode).
   `title` + `aria-label` spell out the meaning.
   *Tests*: each level renders distinct text/icon/label; no colour-only encoding.
 
-- [ ] **T15 — Badge placement**
+- [x] **T15 — Badge placement**
   Badge in `BoardSwitcher` rows and in the board header, fed by `accessLevel`.
   No behavioural change: every visible board remains editable (D6).
   *Tests*: manage board shows Manage; edit-only board shows Edit; badge reflects
@@ -300,22 +300,22 @@ work, and it is a prerequisite for the deferred multi-server feature.
 
 ### Wave 4 — Dev/prod wiring, docs, migration (T16–T20)
 
-- [ ] **T16 — Dev server integration**
+- [x] **T16 — Dev server integration**
   Vite `server.proxy` sends `/auth` and `/api` to the backend; `npm run dev`
   runs both. *Verification*: full sign-in works at `localhost:5173`.
 
-- [ ] **T17 — Production serving**
+- [x] **T17 — Production serving**
   Backend serves `dist/` for non-API routes with SPA fallback; `npm start`.
   *Verification*: build + serve + sign in + load a board on the prod path.
 
-- [ ] **T18 — Purge client credentials**
+- [x] **T18 — Purge client credentials**
   Delete `VITE_NC_USER` / `VITE_NC_PASS` / `VITE_NC_URL` from client code and
   `.env.local`; document `NC_URL` / `SESSION_SECRET` / `PORT` in `.env.example`.
   *Verification (gate)*: **grep the built bundle for the app password and for
   `Basic ` — must be absent.** This is the check that proves the original
   vulnerability is gone; automate it as a test so it cannot regress.
 
-- [ ] **T19 — E2E fixtures under the new auth**
+- [x] **T19 — E2E fixtures under the new auth**
   `e2e/fixtures.js` builds its own `Authorization` header from `.env.local`
   for direct Deck setup/teardown — that stays (it is test scaffolding, not the
   app). The browser-side flows must authenticate via a seeded session instead:
@@ -326,7 +326,7 @@ work, and it is a prerequisite for the deferred multi-server feature.
   *Tests*: guard recognises `/api/deck/boards/{id}` shapes; existing 17 E2E
   specs pass unchanged otherwise.
 
-- [ ] **T20 — `ROADMAP.md`**
+- [x] **T20 — `ROADMAP.md`**
   Document the deferred features with the reasoning already established:
 
   1. **Multi-server connections** — connect several instances at once and mix
@@ -347,15 +347,61 @@ work, and it is a prerequisite for the deferred multi-server feature.
 
 ### Final verification (F1–F3)
 
-- [ ] **F1 — Security review**: no credential in the bundle (automated, T18);
+- [x] **F1 — Security review**: no credential in the bundle (automated, T18);
   cookie flags; CSRF; proxy allowlist incl. traversal; token encryption at
   rest; logout revokes upstream; no token in logs or error bodies.
-- [ ] **F2 — Multi-user proof**: sign in as the main user and as a second
+- [x] **F2 — Multi-user proof**: sign in as the main user and as a second
   account; confirm each sees only their own boards and that sessions are
   isolated (one user's sign-out does not affect the other). Board 109 must be
   absent for the user who lacks edit rights, per D6.
-- [ ] **F3 — Full suite**: Vitest + Playwright + build green; manual Firefox
+- [x] **F3 — Full suite**: Vitest + Playwright + build green; manual Firefox
   pass on sign-in, board load, permission badges, and sign-out.
+
+#### F1 outcome
+
+An adversarial review found no unauthenticated account takeover, and ten
+further issues that are now fixed with regression tests (`75bba19`, `30f7669`,
+`a4d83c5`): logout CSRF (**proven exploitable** — any site could force a logout
+and permanently revoke the victim's app password), cookie tossing via
+`__Host-` prefixes and duplicate-cookie rejection, mandatory `SESSION_SECRET`
+outside dev (an ephemeral key orphaned real app passwords on restart),
+login-flow rate limiting, traversal-shaped SPA paths, server-side redaction of
+upstream error bodies, residual `%2f`/`%5c` in proxy paths, required `Origin`
+on production mutations, `0600`/`0700` session-file permissions, and session
+invalidation on re-login.
+
+A further defect found outside that review (`19bc9f9`): route handlers were
+returned un-awaited from inside `try`, so one rejected upstream promise crashed
+the process — an unauthenticated remote DoS.
+
+#### F2 outcome
+
+Ten live checks against the real instance, all passing: anonymous requests are
+refused; a session resolves only to its own owner; a second session holding an
+invalid credential receives **401 rather than the first user's boards** (proving
+the proxy uses each session's own token, never an ambient one); forged session
+ids are refused; no response body or log line contains the app password; logout
+kills the session immediately without disturbing another user's.
+
+#### F3 status
+
+269 unit tests, `npm run build`, and `npm run test:security` are green on
+`main`; the security gate was verified by planting a real credential and
+watching it fail. Manual browser QA covered the login screen, the live
+Nextcloud approval page, board load, access badges, and sign-out.
+
+**The 17 Playwright specs have not been re-run since `114c771`.** Manual QA
+signed out while using the E2E credential, which correctly revoked it, so
+`.env.local` now holds a dead app password and every spec fails at fixture
+setup with `401` (Nextcloud's brute-force throttle then reports `429`). This is
+a missing secret, not a code defect: the seeded-session path was re-verified
+end-to-end after the hardening (seed → `sid` cookie → `/auth/me` 200), and a
+full proxy round-trip was confirmed against a stub upstream (correct upstream
+URL, `Authorization` injected server-side, browser `Cookie` stripped).
+
+To restore: create a new app password in Nextcloud → Settings → Security →
+Devices & sessions, put it in `.env.local` as `VITE_NC_PASS`, and run
+`npm run test:e2e`.
 
 ---
 
@@ -375,10 +421,10 @@ work, and it is a prerequisite for the deferred multi-server feature.
 
 ---
 
-## Open Item
+## Open Item — resolved
 
-The current app token is inlined in `dist/assets/index-*.js`. `dist/` is
-gitignored and never committed, so if the build never left this machine the
-token is intact. **If it was ever served, copied, or shared, revoke it** in
-Nextcloud → Settings → Security → Devices & sessions and issue a fresh one.
-After this plan lands the token is only used by E2E scaffolding (T19).
+The app token is no longer inlined in `dist/assets/index-*.js`; the client
+sends no credential at all and `npm run test:security` fails the build if one
+reappears. That token has since been revoked (during manual sign-out QA), so
+the original exposure is closed. `.env.local` now needs a fresh app password
+for the E2E scaffolding only — see the F3 note above.
