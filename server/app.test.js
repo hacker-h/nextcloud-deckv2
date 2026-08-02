@@ -252,6 +252,17 @@ describe('auth routes', () => {
     expect(client.initLogin).toHaveBeenCalledTimes(2);
   });
 
+  it('stays alive and answers 500 when the upstream login flow rejects', async () => {
+    const client = { initLogin: vi.fn().mockRejectedValue(new Error('Nextcloud login flow failed with HTTP 405')) };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions: makeSessions(), client });
+
+    const failed = await fetch(`${base}/auth/login`, { method: 'POST', headers: { Origin: base } });
+    expect(failed.status).toBe(500);
+
+    const stillServing = await fetch(`${base}/auth/me`);
+    expect(stillServing.status).toBe(401);
+  });
+
   it('destroys an existing session before completing a re-login', async () => {
     const sessions = makeSessions();
     const oldSid = sessions.create('old-password', 'old-user');

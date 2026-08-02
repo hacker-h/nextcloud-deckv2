@@ -16,6 +16,10 @@ const nextcloud = new NextcloudClient({ baseUrl: config.ncUrl });
 if (!existsSync(distDir)) console.warn(`WARNING: built client directory is missing at ${distDir}; run npm run build before production start.`);
 const app = createApp({ ncUrl: config.ncUrl, sessions, nextcloud, distDir });
 
+// A single unhandled rejection must never take the whole server down: that
+// would turn any upstream Nextcloud hiccup into an unauthenticated DoS.
+process.on('unhandledRejection', (err) => console.error('unhandled rejection', err));
+
 createServer(app).listen(config.port, () => {
   console.log(`Nextcloud Deck backend listening on http://127.0.0.1:${config.port}`);
 });

@@ -29,17 +29,17 @@ export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now(), 
       const url = requestUrl(req);
       if (req.method === 'POST' && url.pathname === '/auth/login') {
         if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
-        return authLogin(req, res, nc, flows, now, flowLimits);
+        return await authLogin(req, res, nc, flows, now, flowLimits);
       }
-      if (req.method === 'GET' && url.pathname === '/auth/poll') return authPoll(req, res, nc, flows, sessions, now);
+      if (req.method === 'GET' && url.pathname === '/auth/poll') return await authPoll(req, res, nc, flows, sessions, now);
       if (req.method === 'POST' && url.pathname === '/auth/logout') {
         if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
-        return authLogout(req, res, ncUrl, sessions);
+        return await authLogout(req, res, ncUrl, sessions);
       }
       if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, ncUrl, sessions);
       if (url.pathname === '/auth' || url.pathname.startsWith('/auth/')) return send(res, 404, { error: 'not found' });
-      if (url.pathname.startsWith('/api/')) return proxy(req, res, url, ncUrl, sessions);
-      if (['GET', 'HEAD'].includes(req.method)) return serveStatic(req, res, url, distDir);
+      if (url.pathname.startsWith('/api/')) return await proxy(req, res, url, ncUrl, sessions);
+      if (['GET', 'HEAD'].includes(req.method)) return await serveStatic(req, res, url, distDir);
       return send(res, 404, { error: 'not found' });
     } catch (err) {
       if (err.name === 'LoginExpiredError') return send(res, 410, { error: 'login expired' });
