@@ -1,5 +1,6 @@
 import { createServer, request as httpRequest } from 'node:http';
 import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -40,8 +41,8 @@ async function upstream(handler) {
   });
 }
 
-async function appUrl({ nextcloud, sessions, client, now, distDir } = {}) {
-  const handler = createApp({ ncUrl: nextcloud, sessions, nextcloud: client, now, distDir });
+async function appUrl({ nextcloud, sessions, client, now, distDir, flowLimits } = {}) {
+  const handler = createApp({ ncUrl: nextcloud, sessions, nextcloud: client, now, distDir, flowLimits });
   return listen(handler);
 }
 
@@ -66,6 +67,38 @@ function rawGet(base, path) {
     });
     req.on('error', reject);
     req.end();
+  });
+}
+
+function rawRequest(base, { path = '/', method = 'GET', headers = {}, body = '' } = {}) {
+  const target = new URL(base);
+  return new Promise((resolveRequest, reject) => {
+    const req = httpRequest({ hostname: target.hostname, port: target.port, path, method, headers }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        resolveRequest({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') });
+      });
+    });
+    req.on('error', reject);
+    req.end(body);
+  });
+}
+
+function rawSocketRequest(base, requestLine) {
+  const target = new URL(base);
+  return new Promise((resolveRequest, reject) => {
+    const socket = connect(Number(target.port), target.hostname);
+    let raw = '';
+    socket.setEncoding('utf8');
+    socket.on('connect', () => socket.write(`${requestLine}\r\nHost: ${target.host}\r\nConnection: close\r\n\r\n`));
+    socket.on('data', (chunk) => { raw += chunk; });
+    socket.on('error', reject);
+    socket.on('close', () => {
+      const [head, body = ''] = raw.split('\r\n\r\n');
+      const status = Number(head.match(/^HTTP\/\d\.\d\s+(\d+)/)?.[1]);
+      resolveRequest({ status, body, raw });
+    });
   });
 }
 
@@ -193,6 +226,64 @@ describe('auth routes', () => {
     expect(cookieNamed(expired, 'sid')).toBeUndefined();
     expect(client.poll).not.toHaveBeenCalled();
   });
+
+  it('rejects cross-origin logout without revoking or killing the session', async () => {
+    const sessions = makeSessions();
+    const sid = sessions.create('app-password', 'alice');
+    const nextcloud = await upstream((req, res) => res.writeHead(200).end('{}'));
+    const base = await appUrl({ nextcloud, sessions });
+
+    const blocked = await fetch(`${base}/auth/logout`, { method: 'POST', headers: { cookie: `sid=${sid}`, Origin: 'https://evil.example' } });
+    const me = await fetch(`${base}/auth/me`, { headers: { cookie: `sid=${sid}` } });
+
+    expect(blocked.status).toBe(403);
+    await expect(me.json()).resolves.toEqual({ user: 'alice', instance: nextcloud });
+    expect(upstreamCalls).toHaveLength(0);
+  });
+
+  it('caps unauthenticated login flows globally and per IP before calling Nextcloud', async () => {
+    const client = { initLogin: vi.fn(async () => ({ loginUrl: 'https://nc/login', pollToken: `token-${client.initLogin.mock.calls.length}` })) };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions: makeSessions(), client, flowLimits: { global: 2, perIp: 1 } });
+
+    expect((await rawRequest(base, { method: 'POST', path: '/auth/login', headers: { 'x-forwarded-for': '203.0.113.1' } })).status).toBe(200);
+    expect((await rawRequest(base, { method: 'POST', path: '/auth/login', headers: { 'x-forwarded-for': '203.0.113.1' } })).status).toBe(429);
+    expect((await rawRequest(base, { method: 'POST', path: '/auth/login', headers: { 'x-forwarded-for': '203.0.113.2' } })).status).toBe(200);
+    expect((await rawRequest(base, { method: 'POST', path: '/auth/login', headers: { 'x-forwarded-for': '203.0.113.3' } })).status).toBe(429);
+    expect(client.initLogin).toHaveBeenCalledTimes(2);
+  });
+
+  it('destroys an existing session before completing a re-login', async () => {
+    const sessions = makeSessions();
+    const oldSid = sessions.create('old-password', 'old-user');
+    const client = {
+      initLogin: vi.fn().mockResolvedValue({ loginUrl: 'https://nc/login', pollToken: 'new-token' }),
+      poll: vi.fn().mockResolvedValue({ appPassword: 'new-password', loginName: 'new-user' }),
+    };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions, client });
+    const flow = cookieNamed(await fetch(`${base}/auth/login`, { method: 'POST' }), 'flow');
+
+    const poll = await fetch(`${base}/auth/poll`, { headers: { cookie: `${flow}; sid=${oldSid}` } });
+
+    expect(poll.status).toBe(200);
+    expect(sessions.get(oldSid)).toBeNull();
+    await expect((await fetch(`${base}/auth/me`, { headers: { cookie: cookieNamed(poll, 'sid') } })).json()).resolves.toMatchObject({ user: 'new-user' });
+  });
+
+  it('uses host-prefixed cookies over HTTPS and rejects duplicate session cookie names', async () => {
+    const sessions = makeSessions();
+    const hostSid = sessions.create('host-password', 'host-user');
+    const plainSid = sessions.create('plain-password', 'plain-user');
+    const client = { initLogin: vi.fn().mockResolvedValue({ loginUrl: 'https://nc/login', pollToken: 'flow-token' }) };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions, client });
+
+    const login = await fetch(`${base}/auth/login`, { method: 'POST', headers: { 'x-forwarded-proto': 'https', Origin: base.replace('http:', 'https:') } });
+    const preferred = await fetch(`${base}/auth/me`, { headers: { cookie: `sid=${plainSid}; __Host-sid=${hostSid}` } });
+    const duplicate = await fetch(`${base}/auth/me`, { headers: { cookie: `sid=${plainSid}; sid=${hostSid}` } });
+
+    expect(login.headers.get('set-cookie')).toContain('__Host-flow=');
+    expect(await preferred.json()).toMatchObject({ user: 'host-user' });
+    expect(duplicate.status).toBe(400);
+  });
 });
 
 describe('authenticated proxy and guards', () => {
@@ -230,6 +321,22 @@ describe('authenticated proxy and guards', () => {
     expect((await fetch(`${base}/api/deck/boards`, { headers: { cookie: `sid=${sid}` } })).status).toBe(403);
   });
 
+  it('returns a redacted JSON error instead of streaming upstream error bodies', async () => {
+    const leaked = `failure Authorization: Basic ${Buffer.from('alice:app-password').toString('base64')}`;
+    const nextcloud = await upstream((req, res) => res.writeHead(500, { 'Content-Type': 'text/plain' }).end(leaked));
+    const sessions = makeSessions();
+    const sid = sessions.create('app-password', 'alice');
+    const base = await appUrl({ nextcloud, sessions });
+
+    const res = await fetch(`${base}/api/deck/boards`, { headers: { cookie: `sid=${sid}` } });
+    const body = await res.text();
+
+    expect(res.status).toBe(500);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    expect(body).not.toContain(Buffer.from('alice:app-password').toString('base64'));
+    expect(JSON.parse(body)).toMatchObject({ error: 'upstream error', status: 500, message: 'failure Authorization: Basic [REDACTED]' });
+  });
+
   it('blocks non-allowlisted and traversal paths after normalisation', async () => {
     const nextcloud = await upstream((req, res) => res.writeHead(200).end('should-not-hit'));
     const sessions = makeSessions();
@@ -238,7 +345,22 @@ describe('authenticated proxy and guards', () => {
     const cookie = { cookie: `sid=${sid}` };
     expect((await fetch(`${base}/api/ocs/cloud/users`, { headers: cookie })).status).toBe(403);
     expect((await fetch(`${base}/api/deck/%2e%2e%2f%2e%2e%2focs/cloud/users`, { headers: cookie })).status).toBe(403);
+    expect((await fetch(`${base}/api/deck/%252f..%252f..%252focs/cloud/users`, { headers: cookie })).status).toBe(403);
     expect(upstreamCalls).toHaveLength(0);
+  });
+
+  it('requires an exact Origin on production-host mutating proxied requests', async () => {
+    const nextcloud = await upstream((req, res) => res.writeHead(200).end('{}'));
+    const sessions = makeSessions();
+    const sid = sessions.create('app-password', 'alice');
+    const base = await appUrl({ nextcloud, sessions });
+    const target = new URL(base);
+    const headers = { Host: 'deck.example.test', Cookie: `sid=${sid}` };
+
+    expect((await rawRequest(base, { method: 'POST', path: '/api/deck/boards', headers })).status).toBe(403);
+    expect((await rawRequest(base, { method: 'POST', path: '/api/deck/boards', headers: { ...headers, Origin: 'https://evil.test' } })).status).toBe(403);
+    expect((await rawRequest(base, { method: 'POST', path: '/api/deck/boards', headers: { ...headers, Origin: `http://${headers.Host}` } })).status).toBe(200);
+    expect(target.hostname).toBe('127.0.0.1');
   });
 
   it('rejects cross-origin mutating proxied requests but allows same-origin and GET', async () => {
@@ -303,6 +425,15 @@ describe('static client serving', () => {
     expect(res.status).toBe(404);
     expect(res.body).not.toContain('createApp');
     expect(res.body).not.toContain('nextcloud-deckv2');
+  });
+
+  it('refuses traversal-shaped SPA fallback paths sent over a raw socket', async () => {
+    const base = await appUrl({ distDir: fixtureDist() });
+
+    const res = await rawSocketRequest(base, 'GET /%2e%2e/%2e%2e/%2e%2e/%2e%2e/etc/passwd HTTP/1.1');
+
+    expect(res.status).toBe(404);
+    expect(res.body).not.toContain('<div id="app">client</div>');
   });
 
   it('refuses symlink escapes from distDir', async () => {

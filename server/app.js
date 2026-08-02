@@ -7,6 +7,7 @@ import { clearFlowCookie, clearSessionCookie, flowCookie, parseCookies, requestI
 const HOP_BY_HOP = new Set(['connection', 'content-length', 'host', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade']);
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const FLOW_TTL_MS = 20 * 60 * 1000;
+const DEFAULT_FLOW_LIMITS = { global: 256, perIp: 16 };
 const STATIC_TYPES = new Map([
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
@@ -19,16 +20,22 @@ const STATIC_TYPES = new Map([
   ['.map', 'application/json; charset=utf-8'],
 ]);
 
-export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now(), distDir = null }) {
+export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now(), distDir = null, flowLimits = DEFAULT_FLOW_LIMITS } = {}) {
   const flows = new Map();
   const nc = nextcloud;
 
   return async function app(req, res) {
     try {
       const url = requestUrl(req);
-      if (req.method === 'POST' && url.pathname === '/auth/login') return authLogin(req, res, nc, flows, now);
+      if (req.method === 'POST' && url.pathname === '/auth/login') {
+        if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
+        return authLogin(req, res, nc, flows, now, flowLimits);
+      }
       if (req.method === 'GET' && url.pathname === '/auth/poll') return authPoll(req, res, nc, flows, sessions, now);
-      if (req.method === 'POST' && url.pathname === '/auth/logout') return authLogout(req, res, ncUrl, sessions);
+      if (req.method === 'POST' && url.pathname === '/auth/logout') {
+        if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
+        return authLogout(req, res, ncUrl, sessions);
+      }
       if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, ncUrl, sessions);
       if (url.pathname === '/auth' || url.pathname.startsWith('/auth/')) return send(res, 404, { error: 'not found' });
       if (url.pathname.startsWith('/api/')) return proxy(req, res, url, ncUrl, sessions);
@@ -46,7 +53,7 @@ async function serveStatic(req, res, url, distDir) {
   const root = await realpath(distDir).catch(() => null);
   if (!root) return send(res, 404, { error: 'not found' });
 
-  const resolved = await resolveStaticPath(root, url.pathname);
+  const resolved = await resolveStaticPath(root, rawPathname(req.url) ?? url.pathname);
   if (!resolved) return send(res, 404, { error: 'not found' });
 
   const headers = {
@@ -68,6 +75,7 @@ async function resolveStaticPath(root, pathname) {
     return null;
   }
   if (decoded.includes('\0')) return null;
+  if (hasParentSegment(decoded)) return null;
 
   const requested = decoded.replace(/^\/+/, '');
   const candidate = requested ? resolve(root, requested) : resolve(root, 'index.html');
@@ -98,11 +106,15 @@ function cacheControl(filePath) {
   return filePath.split(sep).includes('assets') ? 'public, max-age=31536000, immutable' : 'no-cache';
 }
 
-async function authLogin(req, res, nc, flows, now) {
+async function authLogin(req, res, nc, flows, now, limits) {
   evictExpiredFlows(flows, now());
+  const ip = clientIp(req);
+  if (flows.size >= limits.global || activeFlowsForIp(flows, ip) >= limits.perIp) {
+    return send(res, 429, { error: 'too many login flows' });
+  }
   const flow = await nc.initLogin();
   const flowId = randomBytes(32).toString('base64url');
-  flows.set(flowId, { token: flow.pollToken, createdAt: now() });
+  flows.set(flowId, { token: flow.pollToken, createdAt: now(), ip });
   res.setHeader('Set-Cookie', flowCookie(flowId, { secure: requestIsHttps(req) }));
   return send(res, 200, { loginUrl: flow.loginUrl });
 }
@@ -111,7 +123,9 @@ async function authPoll(req, res, nc, flows, sessions, now) {
   const secure = requestIsHttps(req);
   const currentTime = now();
   evictExpiredFlows(flows, currentTime);
-  const flowId = parseCookies(req.headers.cookie).flow;
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies.invalidStateCookie) return send(res, 400, { error: 'invalid cookie' });
+  const flowId = cookies.flow;
   const flow = flowId ? flows.get(flowId) : null;
   if (!flow) {
     res.setHeader('Set-Cookie', clearFlowCookie({ secure }));
@@ -125,6 +139,9 @@ async function authPoll(req, res, nc, flows, sessions, now) {
   const result = await nc.poll(flow.token, { createdAt: flow.createdAt });
   if (!result) return empty(res, 204);
   flows.delete(flowId);
+  const existing = sessionFrom(req, sessions);
+  if (existing?.invalid) return send(res, 400, { error: 'invalid cookie' });
+  if (existing) sessions.destroy(existing.sid);
   const sid = sessions.create(result.appPassword, result.loginName);
   res.setHeader('Set-Cookie', [sessionCookie(sid, { secure }), clearFlowCookie({ secure })]);
   return send(res, 200, { user: result.loginName });
@@ -136,8 +153,15 @@ function evictExpiredFlows(flows, now) {
   }
 }
 
+function activeFlowsForIp(flows, ip) {
+  let count = 0;
+  for (const flow of flows.values()) if (flow.ip === ip) count += 1;
+  return count;
+}
+
 async function authLogout(req, res, ncUrl, sessions) {
   const session = sessionFrom(req, sessions);
+  if (session?.invalid) return send(res, 400, { error: 'invalid cookie' });
   if (session) {
     sessions.destroy(session.sid);
     await revoke(ncUrl, session).catch(() => {});
@@ -148,6 +172,7 @@ async function authLogout(req, res, ncUrl, sessions) {
 
 function authMe(req, res, ncUrl, sessions) {
   const session = sessionFrom(req, sessions);
+  if (session?.invalid) return send(res, 400, { error: 'invalid cookie' });
   if (!session) return send(res, 401, { error: 'unauthenticated', instance: ncUrl });
   sessions.touch(session.sid);
   return send(res, 200, { user: session.user, instance: ncUrl });
@@ -155,8 +180,9 @@ function authMe(req, res, ncUrl, sessions) {
 
 async function proxy(req, res, url, ncUrl, sessions) {
   const session = sessionFrom(req, sessions);
+  if (session?.invalid) return send(res, 400, { error: 'invalid cookie' });
   if (!session) return send(res, 401, { error: 'unauthenticated' });
-  if (!originAllowed(req)) return send(res, 403, { error: 'forbidden' });
+  if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
 
   const target = targetPath(url);
   if (!target.allowed) return send(res, 403, { error: 'forbidden' });
@@ -173,6 +199,10 @@ async function proxy(req, res, url, ncUrl, sessions) {
     duplex: ['GET', 'HEAD'].includes(req.method) ? undefined : 'half',
   });
 
+  if (!upstream.ok && upstream.status !== 304) {
+    return send(res, upstream.status, await upstreamError(upstream));
+  }
+
   res.writeHead(upstream.status, responseHeaders(upstream.headers));
   if (upstream.body) {
     for await (const chunk of upstream.body) res.write(Buffer.from(chunk));
@@ -181,7 +211,13 @@ async function proxy(req, res, url, ncUrl, sessions) {
 }
 
 function targetPath(url) {
-  const decoded = decodeURIComponent(url.pathname);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(url.pathname);
+  } catch {
+    return { allowed: false };
+  }
+  if (/%(?:2f|5c)/i.test(decoded)) return { allowed: false };
   const normalized = new URL(decoded, 'http://local').pathname;
   if (normalized.startsWith('/api/deck/')) {
     return { allowed: true, ocs: false, path: `/index.php/apps/deck/api/v1.0${normalized.slice('/api/deck'.length)}` };
@@ -196,10 +232,10 @@ function targetPath(url) {
   return { allowed: false };
 }
 
-function originAllowed(req) {
+function originAllowed(req, { requireOrigin = false } = {}) {
   if (!MUTATING.has(req.method)) return true;
   const origin = req.headers.origin;
-  if (!origin) return true;
+  if (!origin) return !requireOrigin;
   return origin === requestUrl(req).origin;
 }
 
@@ -209,13 +245,56 @@ async function revoke(ncUrl, session) {
 }
 
 function sessionFrom(req, sessions) {
-  const sid = parseCookies(req.headers.cookie).sid;
+  const cookies = parseCookies(req.headers.cookie);
+  if (cookies.invalidStateCookie) return { invalid: true };
+  const sid = cookies.sid;
   return sid ? sessions.get(sid) : null;
+}
+
+async function upstreamError(upstream) {
+  const text = redact(await upstream.text().catch(() => ''));
+  const contentType = upstream.headers.get('content-type') ?? '';
+  const message = extractErrorMessage(text, contentType);
+  return message ? { error: 'upstream error', status: upstream.status, message } : { error: 'upstream error', status: upstream.status };
+}
+
+function extractErrorMessage(text, contentType) {
+  if (!text) return '';
+  if (contentType.includes('application/json')) {
+    try {
+      const parsed = JSON.parse(text);
+      return String(parsed.message ?? parsed.error ?? parsed.ocs?.meta?.message ?? '').slice(0, 500);
+    } catch {
+      // Fall through to a bounded, redacted text message.
+    }
+  }
+  return text.slice(0, 500);
+}
+
+function redact(value) {
+  return String(value).replace(/(Basic|Bearer)\s+[A-Za-z0-9+/=._-]+/gi, '$1 [REDACTED]');
+}
+
+function hasParentSegment(pathname) {
+  return pathname.split(/[\\/]+/).some((segment) => segment === '..');
+}
+
+function productionRequest(req) {
+  const host = requestUrl(req).hostname;
+  return host !== 'localhost' && host !== '127.0.0.1' && host !== '::1';
+}
+
+function clientIp(req) {
+  return String(req.headers['x-forwarded-for'] ?? req.socket?.remoteAddress ?? '').split(',')[0].trim();
 }
 
 function requestUrl(req) {
   const proto = requestIsHttps(req) ? 'https' : 'http';
   return new URL(req.url, `${proto}://${req.headers.host}`);
+}
+
+function rawPathname(value) {
+  return String(value ?? '').split('?')[0];
 }
 
 function forwardHeaders(headers) {
