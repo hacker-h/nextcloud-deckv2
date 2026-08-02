@@ -1,11 +1,25 @@
 import { randomBytes } from 'node:crypto';
+import { createReadStream } from 'node:fs';
+import { realpath, stat } from 'node:fs/promises';
+import { extname, resolve, sep } from 'node:path';
 import { clearFlowCookie, clearSessionCookie, flowCookie, parseCookies, requestIsHttps, sessionCookie } from './cookies.js';
 
 const HOP_BY_HOP = new Set(['connection', 'content-length', 'host', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade']);
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const FLOW_TTL_MS = 20 * 60 * 1000;
+const STATIC_TYPES = new Map([
+  ['.html', 'text/html; charset=utf-8'],
+  ['.js', 'text/javascript; charset=utf-8'],
+  ['.css', 'text/css; charset=utf-8'],
+  ['.svg', 'image/svg+xml'],
+  ['.json', 'application/json; charset=utf-8'],
+  ['.png', 'image/png'],
+  ['.ico', 'image/x-icon'],
+  ['.woff2', 'font/woff2'],
+  ['.map', 'application/json; charset=utf-8'],
+]);
 
-export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now() }) {
+export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now(), distDir = null }) {
   const flows = new Map();
   const nc = nextcloud;
 
@@ -16,13 +30,72 @@ export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now() }
       if (req.method === 'GET' && url.pathname === '/auth/poll') return authPoll(req, res, nc, flows, sessions, now);
       if (req.method === 'POST' && url.pathname === '/auth/logout') return authLogout(req, res, ncUrl, sessions);
       if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, sessions);
+      if (url.pathname === '/auth' || url.pathname.startsWith('/auth/')) return send(res, 404, { error: 'not found' });
       if (url.pathname.startsWith('/api/')) return proxy(req, res, url, ncUrl, sessions);
+      if (['GET', 'HEAD'].includes(req.method)) return serveStatic(req, res, url, distDir);
       return send(res, 404, { error: 'not found' });
     } catch (err) {
       if (err.name === 'LoginExpiredError') return send(res, 410, { error: 'login expired' });
       return send(res, 500, { error: 'server error' });
     }
   };
+}
+
+async function serveStatic(req, res, url, distDir) {
+  if (!distDir) return send(res, 404, { error: 'not found' });
+  const root = await realpath(distDir).catch(() => null);
+  if (!root) return send(res, 404, { error: 'not found' });
+
+  const resolved = await resolveStaticPath(root, url.pathname);
+  if (!resolved) return send(res, 404, { error: 'not found' });
+
+  const headers = {
+    'Content-Type': contentType(resolved.path),
+    'Cache-Control': resolved.index ? 'no-cache' : cacheControl(resolved.path),
+  };
+  res.writeHead(200, headers);
+  if (req.method === 'HEAD') return res.end();
+  createReadStream(resolved.path)
+    .on('error', () => res.destroy())
+    .pipe(res);
+}
+
+async function resolveStaticPath(root, pathname) {
+  let decoded;
+  try {
+    decoded = decodeURIComponent(pathname);
+  } catch {
+    return null;
+  }
+  if (decoded.includes('\0')) return null;
+
+  const requested = decoded.replace(/^\/+/, '');
+  const candidate = requested ? resolve(root, requested) : resolve(root, 'index.html');
+  const file = await safeFile(root, candidate);
+  if (file) return { path: file, index: false };
+
+  if (extname(decoded)) return null;
+  const index = await safeFile(root, resolve(root, 'index.html'));
+  return index ? { path: index, index: true } : null;
+}
+
+async function safeFile(root, candidate) {
+  const real = await realpath(candidate).catch(() => null);
+  if (!real || !inside(root, real)) return null;
+  const info = await stat(real).catch(() => null);
+  return info?.isFile() ? real : null;
+}
+
+function inside(root, target) {
+  return target === root || target.startsWith(root.endsWith(sep) ? root : `${root}${sep}`);
+}
+
+function contentType(filePath) {
+  return STATIC_TYPES.get(extname(filePath)) ?? 'application/octet-stream';
+}
+
+function cacheControl(filePath) {
+  return filePath.split(sep).includes('assets') ? 'public, max-age=31536000, immutable' : 'no-cache';
 }
 
 async function authLogin(req, res, nc, flows, now) {

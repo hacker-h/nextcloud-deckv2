@@ -1,7 +1,7 @@
-import { createServer } from 'node:http';
-import { mkdtempSync } from 'node:fs';
+import { createServer, request as httpRequest } from 'node:http';
+import { mkdirSync, mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createApp } from './app.js';
 import { SessionStore } from './sessions.js';
@@ -40,9 +40,33 @@ async function upstream(handler) {
   });
 }
 
-async function appUrl({ nextcloud, sessions, client, now } = {}) {
-  const handler = createApp({ ncUrl: nextcloud, sessions, nextcloud: client, now });
+async function appUrl({ nextcloud, sessions, client, now, distDir } = {}) {
+  const handler = createApp({ ncUrl: nextcloud, sessions, nextcloud: client, now, distDir });
   return listen(handler);
+}
+
+function fixtureDist() {
+  const dir = mkdtempSync(join(tmpdir(), 'deck-dist-'));
+  mkdirSync(join(dir, 'assets'));
+  writeFileSync(join(dir, 'index.html'), '<!doctype html><div id="app">client</div>');
+  writeFileSync(join(dir, 'assets', 'index-a1b2c3.js'), 'console.log("asset")');
+  writeFileSync(join(dir, 'assets', 'style-a1b2c3.css'), 'body{}');
+  return dir;
+}
+
+function rawGet(base, path) {
+  const target = new URL(base);
+  return new Promise((resolveRequest, reject) => {
+    const req = httpRequest({ hostname: target.hostname, port: target.port, path, method: 'GET' }, (res) => {
+      const chunks = [];
+      res.on('data', (chunk) => chunks.push(chunk));
+      res.on('end', () => {
+        resolveRequest({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks).toString('utf8') });
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
 }
 
 function cookieNamed(response, name) {
@@ -224,5 +248,99 @@ describe('authenticated proxy and guards', () => {
     expect((await fetch(`${base}/api/deck/boards`, { headers: { cookie, Origin: 'https://evil.test' } })).status).toBe(200);
     expect((await fetch(`${base}/api/deck/boards`, { method: 'POST', headers: { cookie, Origin: 'https://evil.test' } })).status).toBe(403);
     expect((await fetch(`${base}/api/deck/boards`, { method: 'POST', headers: { cookie, Origin: base } })).status).toBe(200);
+  });
+});
+
+describe('static client serving', () => {
+  it('serves index.html at / with no-cache', async () => {
+    const base = await appUrl({ distDir: fixtureDist() });
+
+    const res = await fetch(`${base}/`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(res.headers.get('cache-control')).toBe('no-cache');
+    expect(await res.text()).toContain('<div id="app">client</div>');
+  });
+
+  it('serves a hashed asset with content type and immutable caching', async () => {
+    const base = await appUrl({ distDir: fixtureDist() });
+
+    const res = await fetch(`${base}/assets/index-a1b2c3.js`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/javascript');
+    expect(res.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
+    expect(await res.text()).toContain('console.log');
+  });
+
+  it('falls back to index.html for extensionless SPA routes', async () => {
+    const base = await appUrl({ distDir: fixtureDist() });
+
+    const res = await fetch(`${base}/some/deep/route`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toContain('text/html');
+    expect(await res.text()).toContain('<div id="app">client</div>');
+  });
+
+  it('returns 404 for missing asset paths instead of index.html', async () => {
+    const base = await appUrl({ distDir: fixtureDist() });
+
+    const res = await fetch(`${base}/assets/missing.js`);
+
+    expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain('<div id="app">client</div>');
+  });
+
+  it.each(['/../server/app.js', '/%2e%2e/%2e%2e/package.json', '/....//package.json', '/assets/index-a1b2c3.js%00'])('refuses traversal attempt %s', async (path) => {
+    const base = await appUrl({ distDir: fixtureDist() });
+
+    const res = await rawGet(base, path);
+
+    expect(res.status).toBe(404);
+    expect(res.body).not.toContain('createApp');
+    expect(res.body).not.toContain('nextcloud-deckv2');
+  });
+
+  it('refuses symlink escapes from distDir', async () => {
+    const distDir = fixtureDist();
+    const outside = mkdtempSync(join(tmpdir(), 'deck-outside-'));
+    writeFileSync(join(outside, 'secret.txt'), 'outside secret');
+    symlinkSync(resolve(outside, 'secret.txt'), join(distDir, 'assets', 'escape.txt'));
+    const base = await appUrl({ distDir });
+
+    const res = await fetch(`${base}/assets/escape.txt`);
+
+    expect(res.status).toBe(404);
+    expect(await res.text()).not.toContain('outside secret');
+  });
+
+  it('leaves unauthenticated api routes as 401 JSON', async () => {
+    const base = await appUrl({ distDir: fixtureDist(), nextcloud: 'https://nc.test', sessions: makeSessions() });
+
+    const res = await fetch(`${base}/api/deck/boards`);
+
+    expect(res.status).toBe(401);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    await expect(res.json()).resolves.toEqual({ error: 'unauthenticated' });
+  });
+
+  it('keeps unknown POST paths as 404 JSON', async () => {
+    const base = await appUrl({ distDir: fixtureDist() });
+
+    const res = await fetch(`${base}/unknown`, { method: 'POST' });
+
+    expect(res.status).toBe(404);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    await expect(res.json()).resolves.toEqual({ error: 'not found' });
+  });
+
+  it('404s cleanly when distDir does not exist', async () => {
+    const base = await appUrl({ distDir: join(tmpdir(), 'deck-missing-dist') });
+
+    const res = await fetch(`${base}/`);
+
+    expect(res.status).toBe(404);
   });
 });
