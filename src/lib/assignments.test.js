@@ -11,10 +11,10 @@ import {
 } from './assignments.js';
 
 const TARGET = { boardId: 116, stackId: 366, cardId: 10193 };
-const BASE = 'https://nextcloud-alice.example/index.php/apps/deck/api/v1.0';
+const BASE = '/api/deck';
 
 function client() {
-  return new DeckClient({ baseUrl: 'https://nextcloud-alice.example', username: 'alice', password: 'app-password' });
+  return new DeckClient();
 }
 
 function json(data, init = {}) {

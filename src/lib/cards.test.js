@@ -3,7 +3,7 @@ import { DeckClient, DeckError } from './deck.js';
 import { archiveCard, deleteCard, getCard, unarchiveCard, updateCard } from './cards.js';
 
 function client() {
-  return new DeckClient({ baseUrl: 'https://nextcloud-alice.example', username: 'alice', password: 'app-password' });
+  return new DeckClient();
 }
 
 function json(data, init = {}) {
@@ -43,7 +43,7 @@ describe('card API operations', () => {
       etag: '"card-etag"',
     });
 
-    expect(fetch.mock.calls[0][0]).toBe('https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77');
+    expect(fetch.mock.calls[0][0]).toBe('/api/deck/boards/116/stacks/9/cards/77');
     expect(fetch.mock.calls[0][1].headers['If-None-Match']).toBe('"old-etag"');
   });
 
@@ -85,11 +85,11 @@ describe('card API operations', () => {
     });
 
     expect(fetch.mock.calls[0][0]).toBe(
-      'https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77'
+      '/api/deck/boards/116/stacks/9/cards/77'
     );
     expect(fetch.mock.calls[0][1].method).toBe('GET');
     expect(fetch.mock.calls[1][0]).toBe(
-      'https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77'
+      '/api/deck/boards/116/stacks/9/cards/77'
     );
     expect(fetch.mock.calls[1][1].method).toBe('PUT');
   });
@@ -134,9 +134,9 @@ describe('card API operations', () => {
     await deleteCard(client(), { boardId: 116, stackId: 9, cardId: 77 });
 
     expect(fetch.mock.calls.map(([url, init]) => [url, init.method])).toEqual([
-      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77/archive', 'PUT'],
-      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77/unarchive', 'PUT'],
-      ['https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/9/cards/77', 'DELETE'],
+      ['/api/deck/boards/116/stacks/9/cards/77/archive', 'PUT'],
+      ['/api/deck/boards/116/stacks/9/cards/77/unarchive', 'PUT'],
+      ['/api/deck/boards/116/stacks/9/cards/77', 'DELETE'],
     ]);
   });
 

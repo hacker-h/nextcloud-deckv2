@@ -12,10 +12,10 @@ import {
 
 const CARD = 10193;
 const TARGET = { boardId: 116, stackId: 366, cardId: CARD };
-const BASE = 'https://nextcloud-alice.example/index.php/apps/deck/api/v1.0/boards/116/stacks/366/cards/10193/attachments';
+const BASE = '/api/deck/boards/116/stacks/366/cards/10193/attachments';
 
 function client() {
-  return new DeckClient({ baseUrl: 'https://nextcloud-alice.example', username: 'alice', password: 'app-password' });
+  return new DeckClient();
 }
 
 function json(data, status = 200) {
@@ -152,6 +152,6 @@ describe('attachment operations', () => {
     expect(blob).toBeInstanceOf(Blob);
     expect(fetch.mock.calls[0][0]).toBe(`${BASE}/88`);
     expect(fetch.mock.calls[0][0]).not.toContain('app-password');
-    expect(fetch.mock.calls[0][1].headers.Authorization).toMatch(/^Basic /);
+    expect(fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
   });
 });

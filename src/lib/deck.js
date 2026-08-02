@@ -4,8 +4,8 @@
 // See .sisyphus/M0-RESULTS.md. Deck's API has traps that look like success
 // while doing nothing, so these notes are the only documentation that exists.
 
-const API = '/index.php/apps/deck/api/v1.0';
-const OCS = '/ocs/v2.php';
+const API = '/api/deck';
+const OCS = '/api/ocs';
 
 export class DeckError extends Error {
   constructor(status, body, { method = 'GET', path = '', contentType = '' } = {}) {
@@ -49,14 +49,6 @@ const canEdit = (b) => Boolean((b.permissions ?? {}).PERMISSION_EDIT);
 const byOrder = (a, b) => Number(a.order ?? 0) - Number(b.order ?? 0);
 
 export class DeckClient {
-  #auth;
-  #base;
-
-  constructor({ baseUrl, username, password }) {
-    this.#base = String(baseUrl).replace(/\/$/, '');
-    this.#auth = 'Basic ' + btoa(`${username}:${password}`);
-  }
-
   deck(path, options = {}) {
     return this.#request(API, path, { ...options, ocs: false });
   }
@@ -77,16 +69,15 @@ export class DeckClient {
       headers: extraHeaders = {},
     } = options;
 
-    const headers = { Authorization: this.#auth, Accept: 'application/json', ...extraHeaders };
-    // M0.1: Deck REST CORS allows Authorization/Content-Type/Accept only.
-    // `OCS-APIRequest` on `/index.php/apps/deck/api/...` fails preflight. OCS
-    // endpoints are the opposite: Nextcloud expects this marker there.
+    const headers = { Accept: 'application/json', ...extraHeaders };
+    // OCS endpoints expect this marker. The same-origin proxy also sets it, and
+    // keeping the client header is harmless when it is forwarded.
     if (ocs) headers['OCS-APIRequest'] = 'true';
 
     // M0.4: If-Modified-Since returns HTTP 500. Conditional reads use ETags only.
     if (etag) headers['If-None-Match'] = etag;
 
-    const init = { method, headers, credentials: 'omit', signal };
+    const init = { method, headers, credentials: 'same-origin', signal };
     if (body !== undefined) {
       if (isRawBody(body)) {
         init.body = body;
@@ -98,7 +89,7 @@ export class DeckClient {
 
     let res;
     try {
-      res = await fetch(this.#base + prefix + path, init);
+      res = await fetch(prefix + path, init);
     } catch (err) {
       if (err?.name === 'AbortError') throw new DeckAbortError();
       throw err;
@@ -107,7 +98,9 @@ export class DeckClient {
     // 304 has no body - must return before attempting to parse JSON.
     if (res.status === 304) return { notModified: true, etag };
     if (!res.ok) {
-      const text = redact(await res.text().catch(() => ''), this.#auth);
+      // Upstream error bodies may echo the Authorization header injected by the
+      // proxy; redact any credential-looking value before surfacing the message.
+      const text = redact(await res.text().catch(() => ''));
       throw new DeckError(res.status, text, {
         method,
         path,
@@ -195,8 +188,8 @@ function isRawBody(body) {
   );
 }
 
-function redact(text, auth) {
-  return String(text).replaceAll(auth, '[redacted]');
+function redact(text) {
+  return String(text).replace(/(Basic|Bearer)\s+[A-Za-z0-9+/=._-]+/gi, '$1 [REDACTED]');
 }
 
 async function readResponse(res, responseType) {

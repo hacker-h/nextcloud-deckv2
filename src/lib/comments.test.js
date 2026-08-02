@@ -3,10 +3,10 @@ import { DeckClient, DeckError } from './deck.js';
 import { createComment, deleteComment, listComments, updateComment } from './comments.js';
 
 const CARD = 10193;
-const OCS_BASE = 'https://nextcloud-alice.example/ocs/v2.php/apps/deck/api/v1.0/cards/10193/comments';
+const OCS_BASE = '/api/ocs/apps/deck/api/v1.0/cards/10193/comments';
 
 function client() {
-  return new DeckClient({ baseUrl: 'https://nextcloud-alice.example', username: 'alice', password: 'app-password' });
+  return new DeckClient();
 }
 
 function ocs(data, status = 200) {
