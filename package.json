@@ -11,6 +11,7 @@
     "server": "node server/index.js",
     "start": "node server/index.js",
     "test": "vitest run",
+    "test:security": "npm run build && node scripts/check-bundle.js",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
   },
