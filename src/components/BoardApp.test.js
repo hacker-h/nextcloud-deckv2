@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/svelte';
-import userEvent from '@testing-library/user-event';
 import BoardApp from './BoardApp.svelte';
 
 function json(data) {
@@ -47,15 +46,14 @@ describe('BoardApp account header', () => {
     expect(screen.getByText('alice')).toBeInTheDocument();
   });
 
-  it('calls onSignOut exactly once from the header control', async () => {
+  it('exposes no sign-out control, so logout cannot revoke the app password', () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json([]));
     const onSignOut = vi.fn();
-    const user = userEvent.setup();
+
     render(BoardApp, { props: { currentUser: 'alice', onSignOut } });
 
-    await user.click(screen.getByRole('button', { name: 'Sign out' }));
-
-    expect(onSignOut).toHaveBeenCalledTimes(1);
+    expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument();
+    expect(onSignOut).not.toHaveBeenCalled();
   });
 
   it('renders the current board access badge in the header', async () => {
