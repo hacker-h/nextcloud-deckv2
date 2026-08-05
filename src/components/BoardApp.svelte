@@ -131,11 +131,12 @@
           {board.state.pending} saving…
         </span>
       {/if}
-      <!-- Sign-out is intentionally hidden: logout revokes the app password upstream,
-        which would invalidate the credential the E2E suite authenticates with.
-        The /auth/logout route stays live; restore the button to re-enable it. -->
+      <!-- Plain text beats an avatar menu here: the topbar is dense, and one action
+        does not justify hiding the signed-in username behind another interaction. -->
       <div class="account" title={`Signed in as ${currentUser}`} aria-label={`Signed in as ${currentUser}`}>
         <span class="account-user">{currentUser}</span>
+        <span class="account-sep" aria-hidden="true">•</span>
+        <button class="signout" type="button" onclick={() => onSignOut()}>Sign out</button>
       </div>
     </header>
 
@@ -276,6 +277,21 @@
     text-overflow: ellipsis;
     color: var(--text);
   }
+
+  .account-sep { flex: 0 0 auto; color: var(--border); }
+
+  .signout {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+
+  .signout:hover { background: var(--card-bg-hover); color: var(--text); }
+  .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
   /* Failures surface here rather than blocking the board (PLAN.md §4.1). */
   .toast {

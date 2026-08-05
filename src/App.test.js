@@ -62,7 +62,7 @@ describe('App auth gate', () => {
     render(App, { props: { auth } });
 
     expect(screen.getByText('alice')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Sign in with Nextcloud' })).not.toBeInTheDocument();
   });
 
