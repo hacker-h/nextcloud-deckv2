@@ -1,0 +1,28 @@
+services:
+  deckv2:
+    image: deckv2:local
+    build:
+      context: ${DECKV2_APP_DIR:?set DECKV2_APP_DIR to the nextcloud-deckv2 app checkout}
+      dockerfile: Dockerfile
+    container_name: deckv2
+    restart: always
+    environment:
+      VIRTUAL_HOST: deckv2.xhacker.de
+      LETSENCRYPT_HOST: deckv2.xhacker.de
+      SSL_POLICY: Mozilla-Modern
+      VIRTUAL_PORT: 3000
+      NC_URL: ${NC_URL:?set NC_URL to the Nextcloud base URL}
+      SESSION_SECRET: ${SESSION_SECRET:?set SESSION_SECRET to a durable random value}
+      SESSION_FILE: /app/.data/sessions.json
+    volumes:
+      - deckv2-data:/app/.data
+    networks:
+      - proxy_tier
+
+volumes:
+  deckv2-data:
+
+networks:
+  proxy_tier:
+    name: proxy_tier
+    external: true
