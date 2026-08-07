@@ -19,7 +19,7 @@
     drag.active ? state.cards.filter((c) => !drag.cardIds.includes(c.id)) : state.cards
   );
   const placeholderAt = $derived(isOver ? (drag.overIndex ?? visible.length) : -1);
-  const placeholderH = $derived(drag.h || 36);
+  const placeholderHeights = $derived(drag.heights.length ? drag.heights : [drag.h || 36]);
 </script>
 
 <aside class="rail" class:collapsed class:over={isOver}>
@@ -49,7 +49,9 @@
       <div class="cards" data-cards data-stack-id={stackId}>
         {#each visible as card, i (card.id)}
           {#if i === placeholderAt}
-            <div class="placeholder" style="height:{placeholderH}px"></div>
+            {#each placeholderHeights as h}
+              <div class="placeholder" style="height:{h}px"></div>
+            {/each}
           {/if}
           <Card
             {card}
@@ -61,7 +63,9 @@
           />
         {/each}
         {#if placeholderAt >= visible.length}
-          <div class="placeholder" style="height:{placeholderH}px"></div>
+          {#each placeholderHeights as h}
+            <div class="placeholder" style="height:{h}px"></div>
+          {/each}
         {/if}
         {#if !visible.length && placeholderAt < 0}
           <p class="empty">Drag cards here from any board.</p>

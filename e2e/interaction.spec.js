@@ -289,6 +289,8 @@ test.describe('interaction', () => {
     await page.mouse.move(tb.x + tb.width / 2, target.lastCardBottom + 150, { steps: 20 });
 
     await expect(page.locator(`[data-stack-id="${target.id}"].over`)).toBeVisible();
+    // One card is being dragged, so exactly one slot opens - and only in the
+    // lane under the pointer.
     expect(await page.locator('.placeholder').count()).toBe(1);
 
     await page.mouse.up();

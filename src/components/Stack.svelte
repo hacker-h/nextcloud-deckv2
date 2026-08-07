@@ -11,10 +11,9 @@
     drag.active ? stack.cards.filter((c) => !drag.cardIds.includes(c.id)) : stack.cards
   );
   const placeholderAt = $derived(isOver ? (drag.overIndex ?? visible.length) : -1);
-  // Verified on trello.com: the placeholder is always exactly the height of the
-  // SOURCE card being dragged - a short card yields a short slot, a tall card a
-  // tall one - regardless of how many cards are in the selection.
-  const placeholderH = $derived(drag.h || 36);
+  // One slot per dragged card, each the height that card had at its source, so
+  // the gap the cards will occupy is the gap the user sees.
+  const placeholderHeights = $derived(drag.heights.length ? drag.heights : [drag.h || 36]);
 </script>
 
 <section class="stack" class:over={isOver} data-stack-id={stack.id}>
@@ -26,12 +25,16 @@
   <div class="cards" data-cards>
     {#each visible as card, i (card.id)}
       {#if i === placeholderAt}
-        <div class="placeholder" style="height:{placeholderH}px"></div>
+        {#each placeholderHeights as h}
+          <div class="placeholder" style="height:{h}px"></div>
+        {/each}
       {/if}
       <Card {card} {onDrop} {onOpenCard} {onSelect} {dragIds} selected={selectedIds.includes(card.id)} />
     {/each}
     {#if placeholderAt >= visible.length}
-      <div class="placeholder" style="height:{placeholderH}px"></div>
+      {#each placeholderHeights as h}
+        <div class="placeholder" style="height:{h}px"></div>
+      {/each}
     {/if}
   </div>
 

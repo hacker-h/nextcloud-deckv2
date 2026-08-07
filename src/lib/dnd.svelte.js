@@ -16,6 +16,7 @@ export const drag = $state({
   count: 1,
   w: 0,
   h: 0,
+  heights: [],        // one entry per dragged card, for the drop placeholders
   grabX: 0,           // pointer offset inside the card, so it doesn't jump
   grabY: 0,
   x: 0,
@@ -28,8 +29,23 @@ export function resetDrag() {
   drag.active = false;
   drag.cardIds = [];
   drag.card = null;
+  drag.heights = [];
   drag.overStack = null;
   drag.overIndex = null;
+}
+
+// Measures every card in the gesture while they are all still on screen, so the
+// drop target can show one correctly sized slot per card. Matching ids against
+// the live nodes rather than building a selector keeps an id from the API out
+// of querySelector.
+export function measureHeights(cardIds, fallback) {
+  const heights = new Map(
+    [...document.querySelectorAll('[data-card-id]')].map((el) => [
+      Number(el.dataset.cardId),
+      el.getBoundingClientRect().height,
+    ])
+  );
+  return cardIds.map((id) => heights.get(Number(id)) ?? fallback);
 }
 
 // How far past a card's midpoint the pointer must travel before the placeholder
@@ -180,6 +196,7 @@ function onMove(e) {
     drag.count = g.cardIds.length;
     drag.w = g.w;
     drag.h = g.h;
+    drag.heights = measureHeights(g.cardIds, g.h);
     drag.grabX = g.grabX;
     drag.grabY = g.grabY;
     document.body.style.cursor = 'grabbing';
