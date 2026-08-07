@@ -397,6 +397,12 @@
     background: rgba(0, 0, 0, .26);
     backdrop-filter: blur(6px);
     border-bottom: 1px solid rgba(255, 255, 255, .09);
+    /* backdrop-filter makes this a stacking context, so the board switcher's
+       menu cannot escape it. Without an explicit order the bar paints as a
+       z-index:0 unit and any board element that forms its own context - a
+       disabled Add-a-card button's opacity is enough - covers the open menu. */
+    position: relative;
+    z-index: 30;
   }
   .stat { font-size: 12px; color: var(--text-dim); }
   .current-access { flex: 0 0 auto; }
