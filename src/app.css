@@ -11,6 +11,7 @@
   --line-height: 20px;
   --topbar-h: 48px;
   --rail-w: 44px;
+  --inbox-w: 272px;
 
   /* Trello --ds-* dark tokens */
   --bg: #1D2125;            /* board canvas fallback */

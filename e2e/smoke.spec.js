@@ -9,15 +9,18 @@ import {
 } from './fixtures.js';
 
 test.describe('smoke', () => {
-  test('app loads the dedicated test board', async ({ guardedPage: page }) => {
+  test('app loads the dedicated test board', async ({ guardedPage: page, inbox }) => {
     await page.goto('/');
 
     await expect(page.locator('[data-stack-id]').first()).toBeVisible({ timeout: 15_000 });
 
+    // The inbox panel is a lane too, so it is excluded before comparing the
+    // board's own stacks.
     const stackIds = await page.locator('[data-stack-id]').evaluateAll((els) =>
-      els.map((el) => Number(el.dataset.stackId)).sort((a, b) => a - b)
+      els.map((el) => Number(el.dataset.stackId))
     );
-    expect(stackIds).toEqual(Object.values(TEST_STACKS).sort((a, b) => a - b));
+    const boardStackIds = stackIds.filter((id) => id !== inbox.stack.id).sort((a, b) => a - b);
+    expect(boardStackIds).toEqual(Object.values(TEST_STACKS).sort((a, b) => a - b));
 
     await expect(page.getByText('[deckv2] TEST BOARD - safe to break')).toBeVisible();
     await page.screenshot({ path: '.sisyphus/evidence/card-detail/task-3-smoke.png' });
@@ -33,7 +36,7 @@ test.describe('smoke', () => {
 
   test('guard refuses a mutation aimed at the real board', async ({ deck }) => {
     expect(() => assertBoardScoped('PUT', '/boards/113/stacks/1/cards/2')).toThrow(
-      `Mutation target must be board ${TEST_BOARD_ID}`
+      /Mutation target must be an approved board/
     );
     expect(() => assertBoardScoped('DELETE', '/boards/109/stacks/1')).toThrow();
     expect(() => assertBoardScoped('POST', '/cards/10060/comments')).toThrow();
@@ -60,7 +63,7 @@ test.describe('smoke', () => {
     expect(() => assertBoardScoped('POST', smuggled)).toThrow();
 
     await expect(deck.request('PUT', '/boards/113/stacks/1/cards/2', {})).rejects.toThrow(
-      /Mutation target must be board 116/
+      /Mutation target must be an approved board/
     );
 
     const board = await deck.request('GET', `/boards/${TEST_BOARD_ID}`);

@@ -19,6 +19,7 @@ function env() {
 
 export const TEST_BOARD_ID = 116;
 export const TEST_STACKS = { inbox: 366, todo: 367, doing: 368, blocked: 369, done: 370 };
+export const INBOX_TITLE = '[deckv2] Inbox — managed, do not edit';
 
 const MUTATING = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
 
@@ -26,6 +27,15 @@ const MUTATING = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
 // /cards/{id}/comments with no board segment anywhere in the URL, so they can
 // only be judged against a known-safe set rather than by reading the path.
 const safeCards = new Set();
+
+// The managed inbox board is a second legitimate write target. Its id is not
+// known until it has been looked up, so it is registered at fixture setup
+// rather than hardcoded, and mutations are still refused for every other board.
+const safeBoards = new Set([TEST_BOARD_ID]);
+
+export function registerTestBoard(boardId) {
+  safeBoards.add(Number(boardId));
+}
 
 export function registerTestCard(cardId) {
   safeCards.add(Number(cardId));
@@ -35,9 +45,12 @@ export function forgetTestCards() {
   safeCards.clear();
 }
 
+export function asList(value) {
+  return Array.isArray(value) ? value : value.data;
+}
+
 export async function loadTestBoardCards(deck) {
-  const stacks = await deck.request('GET', `/boards/${TEST_BOARD_ID}/stacks`);
-  const list = Array.isArray(stacks) ? stacks : stacks.data;
+  const list = asList(await deck.request('GET', `/boards/${TEST_BOARD_ID}/stacks`));
   for (const stack of list) for (const card of stack.cards ?? []) registerTestCard(card.id);
 }
 
@@ -48,7 +61,7 @@ export function assertBoardScoped(method, url) {
 
   const refuse = () => {
     throw new Error(
-      `Mutation target must be board ${TEST_BOARD_ID}, refusing ${method} ${redact(url)}`
+      `Mutation target must be an approved board (${[...safeBoards].join(', ')}), refusing ${method} ${redact(url)}`
     );
   };
 
@@ -65,7 +78,7 @@ export function assertBoardScoped(method, url) {
 
   const boards = [...path.matchAll(/\/boards\/(\d+)/g)].map((m) => Number(m[1]));
   if (boards.length) {
-    if (boards.some((id) => id !== TEST_BOARD_ID)) refuse();
+    if (boards.some((id) => !safeBoards.has(id))) refuse();
     return;
   }
 
@@ -110,10 +123,8 @@ export const test = base.extend({
     const auth =
       'Basic ' + Buffer.from(`${e.VITE_NC_USER}:${e.VITE_NC_PASS}`).toString('base64');
 
-    const request = async (method, path, body) => {
+    const send = async (method, path, body) => {
       const url = `${baseUrl}/index.php/apps/deck/api/v1.0${path}`;
-      assertBoardScoped(method, url);
-
       const headers = { Authorization: auth, Accept: 'application/json' };
       if (body !== undefined) headers['Content-Type'] = 'application/json';
 
@@ -126,11 +137,46 @@ export const test = base.extend({
       return res.status === 204 ? null : res.json();
     };
 
-    await use({ request, boardId: TEST_BOARD_ID, stacks: TEST_STACKS });
+    const request = async (method, path, body) => {
+      assertBoardScoped(method, `${baseUrl}/index.php/apps/deck/api/v1.0${path}`);
+      return send(method, path, body);
+    };
+
+    // Bypasses the board guard, which cannot judge a board-less path like
+    // POST /boards. Reserved for fixture setup that establishes what the guard
+    // will subsequently allow; tests use `request`.
+    const rawRequest = send;
+
+    await use({ request, rawRequest, boardId: TEST_BOARD_ID, stacks: TEST_STACKS });
   },
 
-  guardedPage: async ({ page, deck }, use) => {
+  // Creating the inbox is a legitimate first-run side effect, but it must not
+  // happen behind the mutation guard's back. Resolving it here means the guard
+  // learns the board id before the app ever renders.
+  inbox: async ({ deck }, use) => {
+    const boards = asList(await deck.rawRequest('GET', '/boards'));
+    let board = boards.find((b) => b.title === INBOX_TITLE);
+    if (!board) {
+      board = await deck.rawRequest('POST', '/boards', {
+        title: INBOX_TITLE,
+        color: '31CC7C',
+      });
+    }
+    registerTestBoard(board.id);
+
+    let stacks = asList(await deck.request('GET', `/boards/${board.id}/stacks`));
+    if (!stacks.length) {
+      await deck.request('POST', `/boards/${board.id}/stacks`, { title: 'Inbox', order: 0 });
+      stacks = asList(await deck.request('GET', `/boards/${board.id}/stacks`));
+    }
+
+    const stack = stacks[0];
+    await use({ board, stack, cards: stack.cards ?? [] });
+  },
+
+  guardedPage: async ({ page, deck, inbox }, use) => {
     await loadTestBoardCards(deck);
+    for (const card of inbox.cards) registerTestCard(card.id);
     const violations = await installMutationGuard(page);
 
     await use(page);

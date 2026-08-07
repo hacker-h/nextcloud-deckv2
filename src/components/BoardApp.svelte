@@ -7,7 +7,10 @@
   import { touch, sortByMru } from '../lib/mru.js';
   import { accessLevel } from '../lib/permissions.js';
   import { applyShiftClick, emptySelection, orderedSelection } from '../lib/selection.js';
+  import { createInboxStore } from '../lib/inbox.svelte.js';
+  import { withoutInbox, readCollapsed, writeCollapsed } from '../lib/inbox.js';
   import Board from './Board.svelte';
+  import InboxPanel from './InboxPanel.svelte';
   import BoardSwitcher from './BoardSwitcher.svelte';
   import AccessBadge from './AccessBadge.svelte';
   import CardDetailModal from './CardDetailModal.svelte';
@@ -41,9 +44,20 @@
   const error = $derived(board.state.error);
   const cardCount = $derived(stacks.reduce((n, s) => n + s.cards.length, 0));
 
+  const inbox = createInboxStore(client);
+  let inboxCollapsed = $state(readCollapsed());
+
+  function toggleInbox() {
+    inboxCollapsed = !inboxCollapsed;
+    writeCollapsed(inboxCollapsed);
+  }
+
+  // The inbox board is filtered out of the switcher: it is our storage, not a
+  // place the user navigates to.
   async function loadBoards() {
     const { data } = await client.getBoards();
-    boards = sortByMru(data);
+    boards = sortByMru(withoutInbox(data));
+    inbox.init(data);
     return boards;
   }
 
@@ -64,8 +78,15 @@
   const selectedIds = $derived(selection.ids);
   const selectedCount = $derived(selection.ids.length);
 
+  // The inbox is a selectable lane like any other, so ranges work inside it.
+  const allStacks = $derived(
+    inbox.state.stack
+      ? [...stacks, { id: inbox.state.stack.id, cards: inbox.state.cards }]
+      : stacks
+  );
+
   function handleSelect({ card }) {
-    const stack = stacks.find((s) => s.id === card.stackId);
+    const stack = allStacks.find((s) => s.id === card.stackId);
     selection = applyShiftClick(selection, {
       cardId: card.id,
       stackId: card.stackId,
@@ -80,11 +101,37 @@
   // Dragging a selected card takes the whole selection; dragging an unselected
   // one is a plain single-card move and leaves the selection untouched.
   const dragIds = (card) =>
-    selection.ids.includes(card.id) ? orderedSelection(selection, stacks) : [card.id];
+    selection.ids.includes(card.id) ? orderedSelection(selection, allStacks) : [card.id];
 
+  // A drop is routed by which side owns the source and target stacks, so the
+  // four board/inbox combinations stay explicit rather than implied.
   function handleDrop({ cardIds, toStackId, index }) {
-    board.moveCards({ cardIds, toStackId, index, boardId: current.id });
+    const intoInbox = toStackId === inbox.state.stack?.id;
+    const fromInbox = inbox.cardsByIds(cardIds);
+
+    if (intoInbox && !fromInbox.length) {
+      const cards = cardIds.map((id) => board.takeCard(id)).filter(Boolean);
+      inbox.receive({ cards, index, restore: (failed) => board.restoreCards(failed) });
+    } else if (intoInbox) {
+      inbox.reorderWithin({ cards: fromInbox, index });
+    } else if (fromInbox.length) {
+      moveFromInbox({ cards: fromInbox, toStackId, index });
+    } else {
+      board.moveCards({ cardIds, toStackId, index, boardId: current.id });
+    }
+
     if (cardIds.length > 1 || selection.ids.includes(cardIds[0])) clearSelection();
+  }
+
+  async function moveFromInbox({ cards, toStackId, index }) {
+    const placed = board.insertCards({ cards, toStackId, index });
+    const failed = await inbox.release({
+      cards,
+      toBoardId: current.id,
+      toStackId,
+      order: placed.order,
+    });
+    if (failed.length) board.removeCards(failed.map((c) => c.id));
   }
 
   function moveSelectionTo(toStackId) {
@@ -96,6 +143,10 @@
 
   function handleOpenCard({ card }) {
     detail.open({ boardId: current.id, stackId: card.stackId, cardId: card.id });
+  }
+
+  function handleOpenInboxCard({ card }) {
+    detail.open({ boardId: inbox.state.board.id, stackId: card.stackId, cardId: card.id });
   }
 
   async function loadAssignmentOptions(boardId) {
@@ -144,10 +195,16 @@
 </script>
 
 <div class="app">
-  <!-- Inbox rail: visual placeholder only, behaviour lands in M4.5. -->
-  <aside class="rail" title="Inbox (coming in M4.5)">
-    <span class="rail-icon">▤</span>
-  </aside>
+  <InboxPanel
+    state={inbox.state}
+    collapsed={inboxCollapsed}
+    onToggle={toggleInbox}
+    onDrop={handleDrop}
+    onOpenCard={handleOpenInboxCard}
+    onSelect={handleSelect}
+    {selectedIds}
+    {dragIds}
+  />
 
   <div class="main">
     <header class="topbar">
@@ -292,17 +349,6 @@
 
 <style>
   .app { display: flex; height: 100%; }
-
-  .rail {
-    flex: 0 0 var(--rail-w);
-    display: flex;
-    justify-content: center;
-    padding-top: 14px;
-    background: rgba(0, 0, 0, .26);
-    backdrop-filter: blur(6px);
-    border-right: 1px solid rgba(255, 255, 255, .09);
-  }
-  .rail-icon { color: var(--text-dim); font-size: 18px; }
 
   .main { display: flex; flex-direction: column; flex: 1; min-width: 0; position: relative; }
 

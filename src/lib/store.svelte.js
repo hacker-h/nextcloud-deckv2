@@ -172,5 +172,57 @@ export function createBoardStore(client) {
     }
   }
 
-  return { state: s, load, moveCards, replaceCard, removeCard };
+  // --- cross-board transfer (PLAN.md section 7) ---
+  //
+  // The inbox owns a different board, so these hand cards across that boundary
+  // without issuing any request: the inbox store performs the single PUT that
+  // moves the card, and whichever side is losing the card drops it locally.
+
+  function takeCard(cardId) {
+    const found = findCard(cardId);
+    if (!found) return null;
+    found.stack.cards.splice(found.index, 1);
+    return found.card;
+  }
+
+  function restoreCards(cards) {
+    for (const card of cards) {
+      const stack = s.stacks.find((x) => x.id === card.stackId);
+      if (!stack) continue;
+      const at = stack.cards.findIndex((c) => Number(c.order) > Number(card.order));
+      stack.cards.splice(at === -1 ? stack.cards.length : at, 0, card);
+    }
+  }
+
+  function removeCards(cardIds) {
+    for (const id of cardIds) removeCard(id);
+  }
+
+  function insertCards({ cards, toStackId, index }) {
+    const dest = s.stacks.find((x) => x.id === toStackId);
+    if (!dest) return { order: 0 };
+
+    const at = Math.min(index ?? dest.cards.length, dest.cards.length);
+    const before = dest.cards[at - 1] ?? null;
+    const order = before ? Number(before.order) + ORDER_STEP : 0;
+
+    cards.forEach((card, i) => {
+      card.stackId = toStackId;
+      card.order = order + i;
+    });
+    dest.cards.splice(at, 0, ...cards);
+    return { order };
+  }
+
+  return {
+    state: s,
+    load,
+    moveCards,
+    replaceCard,
+    removeCard,
+    takeCard,
+    restoreCards,
+    removeCards,
+    insertCards,
+  };
 }
