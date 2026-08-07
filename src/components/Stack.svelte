@@ -2,7 +2,7 @@
   import Card from './Card.svelte';
   import { drag } from '../lib/dnd.svelte.js';
 
-  let { stack, onDrop, onOpenCard } = $props();
+  let { stack, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds } = $props();
 
   const isOver = $derived(drag.active && drag.overStack === stack.id);
   // Cards being dragged are hidden from the layout so the placeholder occupies
@@ -28,7 +28,7 @@
       {#if i === placeholderAt}
         <div class="placeholder" style="height:{placeholderH}px"></div>
       {/if}
-      <Card {card} {onDrop} {onOpenCard} />
+      <Card {card} {onDrop} {onOpenCard} {onSelect} {dragIds} selected={selectedIds.includes(card.id)} />
     {/each}
     {#if placeholderAt >= visible.length}
       <div class="placeholder" style="height:{placeholderH}px"></div>

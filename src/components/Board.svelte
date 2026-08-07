@@ -2,12 +2,21 @@
   import Stack from './Stack.svelte';
   import DragPreview from './DragPreview.svelte';
 
-  let { stacks, boardId, client, onDrop, onOpenCard } = $props();
+  let { stacks, boardId, client, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onClearSelection } = $props();
 </script>
 
-<div class="board" data-board>
+<!-- Clicking empty board space clears the selection (PLAN.md §6). The handler
+  sits on the board rather than the window so a click inside a modal or the
+  topbar does not silently drop a selection the user is still building. -->
+<svelte:document onkeydown={(e) => e.key === 'Escape' && onClearSelection?.()} />
+
+<div
+  class="board"
+  data-board
+  onpointerdown={(e) => e.target === e.currentTarget && onClearSelection?.()}
+>
   {#each stacks as stack (stack.id)}
-    <Stack {stack} {onDrop} {onOpenCard} />
+    <Stack {stack} {onDrop} {onOpenCard} {onSelect} {selectedIds} {dragIds} />
   {/each}
 </div>
 

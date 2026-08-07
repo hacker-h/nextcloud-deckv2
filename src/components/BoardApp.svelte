@@ -6,6 +6,7 @@
   import { downloadAttachment } from '../lib/attachments.js';
   import { touch, sortByMru } from '../lib/mru.js';
   import { accessLevel } from '../lib/permissions.js';
+  import { applyShiftClick, emptySelection, orderedSelection } from '../lib/selection.js';
   import Board from './Board.svelte';
   import BoardSwitcher from './BoardSwitcher.svelte';
   import AccessBadge from './AccessBadge.svelte';
@@ -58,8 +59,39 @@
     loadAssignmentOptions(b.id);
   }
 
+  let selection = $state(emptySelection());
+
+  const selectedIds = $derived(selection.ids);
+  const selectedCount = $derived(selection.ids.length);
+
+  function handleSelect({ card }) {
+    const stack = stacks.find((s) => s.id === card.stackId);
+    selection = applyShiftClick(selection, {
+      cardId: card.id,
+      stackId: card.stackId,
+      stackCardIds: (stack?.cards ?? []).map((c) => c.id),
+    });
+  }
+
+  function clearSelection() {
+    selection = emptySelection();
+  }
+
+  // Dragging a selected card takes the whole selection; dragging an unselected
+  // one is a plain single-card move and leaves the selection untouched.
+  const dragIds = (card) =>
+    selection.ids.includes(card.id) ? orderedSelection(selection, stacks) : [card.id];
+
   function handleDrop({ cardIds, toStackId, index }) {
     board.moveCards({ cardIds, toStackId, index, boardId: current.id });
+    if (cardIds.length > 1 || selection.ids.includes(cardIds[0])) clearSelection();
+  }
+
+  function moveSelectionTo(toStackId) {
+    const cardIds = orderedSelection(selection, stacks);
+    if (!cardIds.length) return;
+    board.moveCards({ cardIds, toStackId, index: null, boardId: current.id });
+    clearSelection();
   }
 
   function handleOpenCard({ card }) {
@@ -160,7 +192,37 @@
         {/each}
       </div>
     {:else}
-      <Board {stacks} boardId={current?.id} {client} onDrop={handleDrop} onOpenCard={handleOpenCard} />
+      <Board
+        {stacks}
+        boardId={current?.id}
+        {client}
+        onDrop={handleDrop}
+        onOpenCard={handleOpenCard}
+        onSelect={handleSelect}
+        {selectedIds}
+        {dragIds}
+        onClearSelection={clearSelection}
+      />
+    {/if}
+
+    {#if selectedCount > 0}
+      <div class="selbar" role="region" aria-label="Selection actions">
+        <span class="selcount">{selectedCount} selected</span>
+        <label class="selmove">
+          Move to
+          <select
+            aria-label="Move selection to list"
+            value=""
+            onchange={(e) => { moveSelectionTo(Number(e.currentTarget.value)); e.currentTarget.value = ''; }}
+          >
+            <option value="" disabled>Choose a list…</option>
+            {#each stacks as s (s.id)}
+              <option value={s.id}>{s.title}</option>
+            {/each}
+          </select>
+        </label>
+        <button class="selclear" type="button" onclick={clearSelection}>Clear</button>
+      </div>
     {/if}
   </div>
 
@@ -242,7 +304,42 @@
   }
   .rail-icon { color: var(--text-dim); font-size: 18px; }
 
-  .main { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+  .main { display: flex; flex-direction: column; flex: 1; min-width: 0; position: relative; }
+
+  .selbar {
+    position: absolute;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--stack-bg);
+    box-shadow: 0 8px 24px rgb(0 0 0 / 45%);
+    font-size: 13px;
+  }
+  .selcount { font-weight: 600; }
+  .selmove { display: flex; align-items: center; gap: 6px; color: var(--text-dim); }
+  .selmove select {
+    padding: 4px 6px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--card-bg);
+    color: var(--text);
+    font-size: 13px;
+  }
+  .selclear {
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: transparent;
+    color: var(--text-dim);
+    cursor: pointer;
+  }
+  .selclear:hover { background: var(--card-bg-hover); color: var(--text); }
 
   .topbar {
     display: flex;

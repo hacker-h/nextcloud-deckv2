@@ -1,7 +1,7 @@
 <script>
   import { draggable } from '../lib/dnd.svelte.js';
 
-  let { card, onDrop, onOpenCard } = $props();
+  let { card, onDrop, onOpenCard, onSelect, selected = false, dragIds } = $props();
 
   const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const due = $derived.by(() => {
@@ -25,12 +25,20 @@
 
 <div
   class="card"
+  class:selected
   role="button"
   tabindex="0"
   aria-label={card.title}
+  aria-pressed={selected}
   data-card-id={card.id}
   onkeydown={onKeydown}
-  use:draggable={() => ({ card, onDrop, onActivate: () => onOpenCard?.({ card }) })}
+  use:draggable={() => ({
+    card,
+    onDrop,
+    cardIds: dragIds?.(card) ?? [card.id],
+    onActivate: () => onOpenCard?.({ card }),
+    onSelect: () => onSelect?.({ card }),
+  })}
 >
   <div class="inner">
     {#if labels.length}
@@ -104,6 +112,12 @@
        feedback is a large part of why it feels fast. */
   }
   .card:hover { background: var(--card-bg-hover); }
+  /* Measured from Trello: 2px rgb(0,95,204), drawn inside so a selected card
+     does not shift its neighbours. */
+  .selected {
+    background: var(--card-bg-hover);
+    box-shadow: inset 0 0 0 2px rgb(0, 95, 204);
+  }
 
   /* Trello: padding 8px 12px 4px, min-height 36px on the card itself. */
   .inner {
