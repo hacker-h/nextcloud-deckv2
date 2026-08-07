@@ -12,6 +12,7 @@
   import Board from './Board.svelte';
   import InboxPanel from './InboxPanel.svelte';
   import BoardSwitcher from './BoardSwitcher.svelte';
+  import BottomNav from './BottomNav.svelte';
   import AccessBadge from './AccessBadge.svelte';
   import CardDetailModal from './CardDetailModal.svelte';
   import CardCoreEditor from './CardCoreEditor.svelte';
@@ -46,6 +47,7 @@
 
   const inbox = createInboxStore(client);
   let inboxCollapsed = $state(readCollapsed());
+  let switcherOpen = $state(false);
 
   function toggleInbox() {
     inboxCollapsed = !inboxCollapsed;
@@ -208,7 +210,7 @@
 
   <div class="main">
     <header class="topbar">
-      <BoardSwitcher {boards} {current} onselect={openBoard} />
+      <BoardSwitcher {boards} {current} onselect={openBoard} bind:open={switcherOpen} />
       {#if current}
         <span class="current-access"><AccessBadge level={accessLevel(current)} /></span>
       {/if}
@@ -281,6 +283,13 @@
         <button class="selclear" type="button" onclick={clearSelection}>Clear</button>
       </div>
     {/if}
+
+    <BottomNav
+      inboxOpen={!inboxCollapsed}
+      {switcherOpen}
+      onInbox={toggleInbox}
+      onSwitchBoards={() => (switcherOpen = !switcherOpen)}
+    />
   </div>
 
   {#if detail.state.cardId != null}
@@ -354,7 +363,8 @@
 
   .selbar {
     position: absolute;
-    bottom: 16px;
+    /* Clears the view dock, which owns the bottom centre of the board. */
+    bottom: 76px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;

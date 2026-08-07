@@ -2,11 +2,16 @@
   import AccessBadge from './AccessBadge.svelte';
   import { accessLevel } from '../lib/permissions.js';
 
-  let { boards, current, onselect } = $props();
+  let { boards, current, onselect, open = $bindable(false) } = $props();
 
-  let open = $state(false);
   let query = $state('');
   let input = $state(null);
+
+  // Opening from the dock has to focus the search box the same way the trigger
+  // does, so the effect watches the state rather than the click.
+  $effect(() => {
+    if (open) queueMicrotask(() => input?.focus());
+  });
 
   const filtered = $derived(
     boards.filter((b) => b.title.toLowerCase().includes(query.toLowerCase()))
@@ -15,7 +20,6 @@
   function toggle() {
     open = !open;
     query = '';
-    if (open) queueMicrotask(() => input?.focus());
   }
 
   function pick(board) {

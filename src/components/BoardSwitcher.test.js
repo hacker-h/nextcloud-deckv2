@@ -47,3 +47,34 @@ describe('BoardSwitcher access badges', () => {
     expect(label.compareDocumentPosition(badge) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });
+
+describe('BoardSwitcher external control', () => {
+  const props = () => ({ boards, current: boards[0], onselect: vi.fn() });
+
+  it('opens the menu when a caller sets open', async () => {
+    const { rerender, container } = render(BoardSwitcher, { props: props() });
+    expect(container.querySelector('.menu')).toBeNull();
+
+    await rerender({ ...props(), open: true });
+
+    expect(container.querySelector('.menu')).toBeInTheDocument();
+  });
+
+  it('focuses the search box however the menu was opened', async () => {
+    const { rerender, container } = render(BoardSwitcher, { props: props() });
+
+    await rerender({ ...props(), open: true });
+    await vi.waitFor(() =>
+      expect(document.activeElement).toBe(container.querySelector('.search'))
+    );
+  });
+
+  it('closes on Escape', async () => {
+    const { container } = render(BoardSwitcher, { props: { ...props(), open: true } });
+    expect(container.querySelector('.menu')).toBeInTheDocument();
+
+    await userEvent.keyboard('{Escape}');
+
+    expect(container.querySelector('.menu')).toBeNull();
+  });
+});
