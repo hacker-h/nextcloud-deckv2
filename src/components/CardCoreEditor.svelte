@@ -2,8 +2,9 @@
   import { parseChecklists, serializeChecklists } from '../lib/checklist.js';
   import CardChecklist from './CardChecklist.svelte';
   import AddChecklistPopover from './AddChecklistPopover.svelte';
+  import { isTemplateCard } from '../lib/cards.js';
 
-  let { card, onSave, onDraftChange = () => {}, error = null, members = [] } = $props();
+  let { card, onSave, onDraftChange = () => {}, error = null, members = [], onCreateFromTemplate } = $props();
 
   let editingTitle = $state(false);
   let titleDraft = $state('');
@@ -16,6 +17,17 @@
   const parsed = $derived(parseChecklists(rawDescription));
   const descriptionText = $derived(parsed.descriptionText);
   const checklists = $derived(parsed.checklists);
+  const isTemplate = $derived(isTemplateCard(card));
+
+  async function toggleTemplate() {
+    let newDesc = rawDescription;
+    if (isTemplate) {
+      newDesc = newDesc.replace(/<!--\s*template\s*-->/gi, '').trim();
+    } else {
+      newDesc = `${newDesc}\n<!-- template -->`.trim();
+    }
+    await onSave?.({ description: newDesc });
+  }
 
   $effect(() => {
     onDraftChange(editingDesc && descDraft !== descriptionText ? { description: descDraft } : null);
@@ -135,6 +147,26 @@
 </script>
 
 <section class="core">
+  {#if isTemplate}
+    <div class="template-notice-banner">
+      <span class="template-notice-text">
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6">
+          <path d="M4 12V4h5l3 3v5H4z" stroke-linejoin="round"/>
+          <path d="M9 4v3h3" stroke-linejoin="round"/>
+        </svg>
+        Dies ist eine Vorlagekarte.
+      </span>
+      {#if onCreateFromTemplate}
+        <button class="create-from-template-btn" type="button" onclick={onCreateFromTemplate}>
+          <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+            <path d="M8 3.5v9M3.5 8h9" />
+          </svg>
+          Karte aus Vorlage erstellen
+        </button>
+      {/if}
+    </div>
+  {/if}
+
   <div class="header-row">
     <span class="icon-circle" aria-hidden="true">
       <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -189,6 +221,13 @@
         <path d="M5.5 8.5l2 2 3.5-4" />
       </svg>
       Checkliste
+    </button>
+    <button class="pill-btn {isTemplate ? 'active-template' : ''}" type="button" onclick={toggleTemplate}>
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <path d="M4 12V4h5l3 3v5H4z" stroke-linejoin="round"/>
+        <path d="M9 4v3h3" stroke-linejoin="round"/>
+      </svg>
+      {isTemplate ? '✓ Ist eine Vorlage' : 'Als Vorlage festlegen'}
     </button>
   </div>
 
@@ -412,6 +451,47 @@
   }
 
   .flex-spacer { flex: 1; }
+
+  .template-notice-banner {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #1c2b42;
+    border: 1px solid #1f487e;
+    border-radius: 8px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    color: #579dff;
+  }
+  .template-notice-text {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .create-from-template-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: #579dff;
+    color: #1d2125;
+    border: none;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .create-from-template-btn:hover {
+    background: #85b8ff;
+  }
+  .pill-btn.active-template {
+    background: #1c2b42;
+    color: #579dff;
+    border: 1px solid #1f487e;
+  }
 
   .due-row {
     display: flex;

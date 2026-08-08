@@ -2,6 +2,13 @@ export function getCard(client, { boardId, stackId, cardId, etag, signal }) {
   return client.deck(`/boards/${boardId}/stacks/${stackId}/cards/${cardId}`, { etag, signal });
 }
 
+export function createCard(client, { boardId, stackId, title, description = '', duedate = null }) {
+  return client.deck(`/boards/${boardId}/stacks/${stackId}/cards`, {
+    method: 'POST',
+    body: { title, description, duedate, type: 'plain' }
+  });
+}
+
 export async function updateCard(client, { boardId, stackId, cardId, changes }) {
   const fresh = await getCard(client, { boardId, stackId, cardId });
   const body = buildCardPayload(fresh.data, changes);
@@ -22,6 +29,25 @@ export function unarchiveCard(client, { boardId, stackId, cardId }) {
 
 export function deleteCard(client, { boardId, stackId, cardId }) {
   return client.deck(`/boards/${boardId}/stacks/${stackId}/cards/${cardId}`, { method: 'DELETE' });
+}
+
+export function isTemplateCard(card) {
+  if (!card) return false;
+  if (card.isTemplate) return true;
+  return Boolean(card.description?.includes('<!-- template -->'));
+}
+
+export async function createCardFromTemplate(client, { boardId, stackId, templateCard, newTitle }) {
+  const title = newTitle || templateCard.title;
+  const description = (templateCard.description || '').replace(/<!--\s*template\s*-->/gi, '').trim();
+
+  return createCard(client, {
+    boardId,
+    stackId,
+    title,
+    description,
+    duedate: templateCard.duedate
+  });
 }
 
 export function buildCardPayload(card, changes = {}) {

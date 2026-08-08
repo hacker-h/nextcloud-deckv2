@@ -2,6 +2,7 @@
   import { draggable } from '../lib/dnd.svelte.js';
   import ImageLightbox from './ImageLightbox.svelte';
   import { getChecklistSummary } from '../lib/checklist.js';
+  import { isTemplateCard } from '../lib/cards.js';
 
   let { card, onDrop, onOpenCard, onSelect, selected = false, selectionMode = false, dragIds, onUploadAttachment, onAttachLink } = $props();
 
@@ -19,8 +20,9 @@
 
   const labels = $derived(card.labels ?? []);
   const checklistSummary = $derived(getChecklistSummary(card.description));
+  const isTemplate = $derived(isTemplateCard(card));
   const hasDesc = $derived(Boolean(card.description?.trim()));
-  const hasMeta = $derived(due || hasDesc || card.commentsCount > 0 || card.attachmentCount > 0 || checklistSummary.total > 0);
+  const hasMeta = $derived(due || hasDesc || card.commentsCount > 0 || card.attachmentCount > 0 || checklistSummary.total > 0 || isTemplate);
 
   const imageAttachment = $derived.by(() => {
     if (card.coverUrl) return { url: card.coverUrl, name: card.title };
@@ -153,6 +155,15 @@
 
     <div class="card-content">
       <span class="title">{card.title}</span>
+      {#if isTemplate}
+        <div class="template-badge-pill" title="Diese Karte ist eine Vorlage">
+          <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M4 12V4h5l3 3v5H4z" stroke-linejoin="round"/>
+            <path d="M9 4v3h3" stroke-linejoin="round"/>
+          </svg>
+          Diese Karte ist eine Vorlage
+        </div>
+      {/if}
       {#if thumbnailUrl}
         <button
           class="thumb-btn"
@@ -342,6 +353,21 @@
   .checklist-badge.complete {
     background: #1f845a;
     color: #ffffff;
+  }
+
+  .template-badge-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: #1c2b42;
+    color: #579dff;
+    border: 1px solid #1f487e;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 8px;
+    border-radius: 12px;
+    margin-top: 5px;
+    width: fit-content;
   }
 
   .card-drop-overlay {
