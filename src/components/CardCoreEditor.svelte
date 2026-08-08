@@ -8,9 +8,6 @@
 
   const description = $derived(card?.description ?? '');
 
-  // The description is explicit save/cancel, so an in-progress edit only exists
-  // locally. Report the pending text (not just a flag) so closing the modal can
-  // actually persist it when the user picks Save.
   $effect(() => {
     onDraftChange(editingDesc && descDraft !== description ? { description: descDraft } : null);
   });
@@ -23,9 +20,6 @@
     return !Number.isNaN(t) && t < Date.now();
   });
 
-  // <input type="datetime-local"> speaks wall-clock time with no zone. Building
-  // the string from local getters (instead of slicing toISOString, which is UTC)
-  // is what keeps the displayed time from drifting by the zone offset.
   function toLocalInput(iso) {
     if (!iso) return '';
     const d = new Date(iso);
@@ -89,46 +83,99 @@
 </script>
 
 <section class="core">
-  <div class="field">
-    {#if editingTitle}
-      <!-- svelte-ignore a11y_autofocus -->
-      <input
-        class="title-input"
-        type="text"
-        aria-label="Card title"
-        aria-invalid={titleInvalid}
-        bind:value={titleDraft}
-        onkeydown={onTitleKeydown}
-        onblur={commitTitle}
-        autofocus
-      />
-      {#if titleInvalid}
-        <p class="hint" role="alert">Titel darf nicht leer sein</p>
+  <div class="header-row">
+    <span class="icon-circle" aria-hidden="true">
+      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
+        <circle cx="8" cy="8" r="6" />
+      </svg>
+    </span>
+    <div class="title-container">
+      {#if editingTitle}
+        <!-- svelte-ignore a11y_autofocus -->
+        <input
+          class="title-input"
+          type="text"
+          aria-label="Card title"
+          aria-invalid={titleInvalid}
+          bind:value={titleDraft}
+          onkeydown={onTitleKeydown}
+          onblur={commitTitle}
+          autofocus
+        />
+        {#if titleInvalid}
+          <p class="hint" role="alert">Titel darf nicht leer sein</p>
+        {/if}
+      {:else}
+        <button class="title-btn" type="button" onclick={startTitle}>{card?.title ?? ''}</button>
       {/if}
-    {:else}
-      <button class="title" type="button" onclick={startTitle}>{card?.title ?? ''}</button>
-    {/if}
+    </div>
   </div>
 
-  <div class="field">
-    <h3 class="legend">Beschreibung</h3>
+  <div class="action-pills">
+    <button class="pill-btn" type="button" onclick={startDesc}>
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <path d="M8 3.5v9M3.5 8h9" />
+      </svg>
+      Hinzufügen
+    </button>
+    <button class="pill-btn" type="button">
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <path d="M2.5 8.5L8.5 2.5h5v5L7.5 13.5z" />
+      </svg>
+      Labels
+    </button>
+    <button class="pill-btn" type="button">
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <circle cx="8" cy="8" r="6" />
+        <path d="M8 4.5v4l2.5 2.5" />
+      </svg>
+      Datum
+    </button>
+    <button class="pill-btn" type="button">
+      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+        <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
+        <path d="M5.5 8.5l2 2 3.5-4" />
+      </svg>
+      Checkliste
+    </button>
+  </div>
+
+  <div class="section-field">
+    <div class="section-head">
+      <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+        <path d="M2.5 4h11M2.5 8h11M2.5 12h7" />
+      </svg>
+      <h3 class="legend">Beschreibung</h3>
+    </div>
+
     {#if editingDesc}
-      <textarea class="desc-input" aria-label="Beschreibung der Karte" rows="5" bind:value={descDraft}></textarea>
-      <div class="actions">
+      <textarea class="desc-input" aria-label="Beschreibung der Karte" rows="4" placeholder="Detaillierte Beschreibung hinzufügen ..." bind:value={descDraft}></textarea>
+      <div class="desc-actions">
         <button class="btn primary" type="button" onclick={saveDesc}>Speichern</button>
-        <button class="btn" type="button" onclick={cancelDesc}>Abbrechen</button>
+        <button class="btn ghost" type="button" onclick={cancelDesc}>Abbrechen</button>
+        <div class="flex-spacer"></div>
+        <button class="btn help-btn" type="button">Formatierungshilfe</button>
       </div>
     {:else if description}
-      <p class="desc" data-testid="description">{description}</p>
-      <button class="btn" type="button" onclick={startDesc}>Beschreibung bearbeiten</button>
+      <div class="desc-box" onclick={startDesc} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && startDesc()}>
+        <p class="desc" data-testid="description">{description}</p>
+      </div>
     {:else}
-      <button class="btn empty" type="button" onclick={startDesc}>Fügen Sie eine detailliertere Beschreibung hinzu</button>
+      <button class="desc-placeholder-btn" type="button" aria-label="Fügen Sie eine detailliertere Beschreibung hinzu" onclick={startDesc}>
+        Detaillierte Beschreibung hinzufügen ...
+      </button>
     {/if}
   </div>
 
-  <div class="field">
-    <h3 class="legend">Ablaufdatum</h3>
-    <div class="actions">
+  <div class="section-field">
+    <div class="section-head">
+      <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+        <circle cx="8" cy="8" r="6" />
+        <path d="M8 4.5v4l2.5 2.5" />
+      </svg>
+      <h3 class="legend">Ablaufdatum</h3>
+    </div>
+    <div class="due-row">
       <input
         class="due-input"
         class:overdue
@@ -138,7 +185,7 @@
         onchange={onDueChange}
       />
       {#if due}
-        <button class="btn" type="button" onclick={clearDue}>Entfernen</button>
+        <button class="btn ghost" type="button" onclick={clearDue}>Entfernen</button>
       {/if}
     </div>
     {#if overdue}<p class="hint overdue-text">Überfällig</p>{/if}
@@ -151,68 +198,182 @@
 
 <style>
   .core { display: flex; flex-direction: column; gap: 20px; }
-  .field { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
 
-  .legend {
-    margin: 0;
-    font-size: 12px;
-    line-height: 16px;
-    font-weight: 600;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+  .header-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
   }
 
-  .title {
+  .icon-circle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: 4px;
+    color: #9fadbc;
+  }
+
+  .title-container {
+    flex: 1;
+  }
+
+  .title-btn {
     width: 100%;
-    padding: 4px 8px;
+    padding: 2px 6px;
+    margin-left: -6px;
     border: 0;
     border-radius: 6px;
     background: transparent;
-    font-size: 18px;
-    line-height: 24px;
+    color: #b6c2cf;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 28px;
     text-align: left;
     word-break: break-word;
     cursor: pointer;
   }
-  .title:hover { background: var(--card-bg-hover); }
+  .title-btn:hover { background: #a1bdd914; }
 
-  .title-input, .desc-input, .due-input {
+  .title-input {
     width: 100%;
-    padding: 6px 8px;
-    border: 2px solid var(--accent);
+    padding: 4px 8px;
+    margin-left: -6px;
+    border: 2px solid #579dff;
     border-radius: 6px;
-    background: var(--stack-bg);
-    color: var(--text);
+    background: #22272b;
+    color: #b6c2cf;
+    font-size: 20px;
+    font-weight: 600;
+    line-height: 28px;
+  }
+
+  .action-pills {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-left: 28px;
+  }
+
+  .pill-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: #2c333a;
+    border: 0;
+    border-radius: 6px;
+    color: #b6c2cf;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: background 0.1s ease;
+  }
+  .pill-btn:hover { background: #38414a; color: #ffffff; }
+
+  .section-field {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #9fadbc;
+  }
+
+  .legend {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: #b6c2cf;
+  }
+
+  .desc-placeholder-btn {
+    width: 100%;
+    padding: 12px 16px;
+    margin-left: 28px;
+    max-width: calc(100% - 28px);
+    background: #22272b;
+    border: 1px solid #38414a;
+    border-radius: 8px;
+    color: #9fadbc;
+    font-size: 14px;
+    text-align: left;
+    cursor: pointer;
+  }
+  .desc-placeholder-btn:hover { background: #2c333a; }
+
+  .desc-box {
+    padding: 12px 16px;
+    margin-left: 28px;
+    max-width: calc(100% - 28px);
+    background: #22272b;
+    border: 1px solid #38414a;
+    border-radius: 8px;
+    color: #b6c2cf;
+    cursor: pointer;
+  }
+  .desc-box:hover { background: #2c333a; }
+
+  .desc-input {
+    width: 100%;
+    margin-left: 28px;
+    max-width: calc(100% - 28px);
+    padding: 12px 16px;
+    background: #22272b;
+    border: 2px solid #579dff;
+    border-radius: 8px;
+    color: #b6c2cf;
+    font: inherit;
+    font-size: 14px;
+    resize: vertical;
+  }
+
+  .desc-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 28px;
+    max-width: calc(100% - 28px);
+    margin-top: 6px;
+  }
+
+  .flex-spacer { flex: 1; }
+
+  .due-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-left: 28px;
+  }
+
+  .due-input {
+    padding: 6px 10px;
+    background: #22272b;
+    border: 1px solid #38414a;
+    border-radius: 6px;
+    color: #b6c2cf;
     font: inherit;
   }
-  .title-input { font-size: 18px; line-height: 24px; }
-  .desc-input { resize: vertical; }
-  .due-input { width: auto; border-width: 1px; border-color: var(--border); }
-  .due-input.overdue { border-color: var(--danger); }
-
-  /* pre-wrap keeps author line breaks without ever interpreting markup, which
-     is what makes plain-text rendering safe here. */
-  .desc {
-    margin: 0;
-    white-space: pre-wrap;
-    word-break: break-word;
-  }
-
-  .actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 
   .btn {
     padding: 6px 12px;
     border: 0;
-    border-radius: 6px;
-    background: #a1bdd914;
-    color: var(--text);
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
     cursor: pointer;
   }
-  .btn:hover { background: #a1bdd925; }
-  .primary { background: var(--accent); color: #1d2125; }
-  .empty { width: 100%; text-align: left; color: var(--text-dim); }
+  .primary { background: #579dff; color: #1d2125; font-weight: 600; }
+  .primary:hover { background: #85b8ff; }
+  .ghost { background: transparent; color: #9fadbc; }
+  .ghost:hover { background: #a1bdd914; color: #b6c2cf; }
+  .help-btn { background: #a1bdd914; color: #9fadbc; }
+  .help-btn:hover { background: #a1bdd925; color: #b6c2cf; }
 
-  .hint { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-dim); }
-  .error, .overdue-text { color: var(--danger); }
+  .hint { margin: 0; margin-left: 28px; font-size: 12px; color: #9fadbc; }
+  .error, .overdue-text { color: #f87171; }
 </style>
+

@@ -134,7 +134,14 @@
 {/snippet}
 
 <section class="comments">
-  <h3 class="legend">Kommentare</h3>
+  <div class="section-head">
+    <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M2.5 3.5h11a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-7l-4 3v-3h-0a1 1 0 0 1-1-1v-7a1 1 0 0 1 1-1z" />
+    </svg>
+    <h3 class="legend">Kommentare und Aktivität</h3>
+    <div class="flex-spacer"></div>
+    <button class="btn details-btn" type="button">Details anzeigen</button>
+  </div>
 
   <form
     class="composer"
@@ -143,7 +150,7 @@
       submit();
     }}
   >
-    <textarea class="input" aria-label="Kommentar schreiben" rows="3" bind:value={draft}></textarea>
+    <textarea class="input" aria-label="Kommentar schreiben" rows="3" placeholder="Schreiben Sie einen Kommentar..." bind:value={draft}></textarea>
     <button class="btn primary" type="submit" disabled={pending || !draft.trim()}>
       {pending ? 'Wird gespeichert…' : 'Kommentieren'}
     </button>
@@ -171,8 +178,8 @@
                 submitReply(comment);
               }}
             >
-              <textarea class="input" aria-label="Write a reply" rows="2" bind:value={replyDraft}></textarea>
-              <button class="btn primary" type="submit" disabled={pending || !replyDraft.trim()}>Send reply</button>
+              <textarea class="input" aria-label="Write a reply" rows="2" placeholder="Antworten..." bind:value={replyDraft}></textarea>
+              <button class="btn primary" type="submit" disabled={pending || !replyDraft.trim()}>Antworten</button>
             </form>
           {/if}
           {#if replies.length}
@@ -189,20 +196,38 @@
 </section>
 
 <style>
-  .comments { display: flex; flex-direction: column; gap: 12px; }
+  .comments { display: flex; flex-direction: column; gap: 14px; }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #9fadbc;
+  }
 
   .legend {
     margin: 0;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 16px;
     font-weight: 600;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    color: #b6c2cf;
   }
 
+  .flex-spacer { flex: 1; }
+
+  .details-btn {
+    padding: 6px 12px;
+    background: #2c333a;
+    border: 0;
+    border-radius: 6px;
+    color: #b6c2cf;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .details-btn:hover { background: #38414a; color: #ffffff; }
+
   ul { margin: 0; padding: 0; list-style: none; }
-  .thread { display: flex; flex-direction: column; gap: 12px; }
+  .thread { display: flex; flex-direction: column; gap: 14px; }
   .replies { display: flex; flex-direction: column; gap: 8px; margin: 8px 0 0 36px; }
 
   .composer { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
@@ -210,43 +235,46 @@
 
   .input {
     width: 100%;
-    padding: 8px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--stack-bg);
-    color: var(--text);
+    padding: 10px 14px;
+    background: #22272b;
+    border: 1px solid #38414a;
+    border-radius: 8px;
+    color: #b6c2cf;
     font: inherit;
+    font-size: 14px;
     resize: vertical;
   }
-  .input:focus { border-color: var(--accent); outline: none; }
+  .input:focus { border-color: #579dff; outline: none; }
 
-  .row { display: flex; gap: 8px; align-items: flex-start; }
+  .row { display: flex; gap: 10px; align-items: flex-start; }
 
   .avatar {
     display: inline-flex;
     flex: 0 0 auto;
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     align-items: center;
     justify-content: center;
     border-radius: 50%;
-    background: var(--accent);
+    background: #e2b203;
     color: #1d2125;
-    font-size: 11px;
+    font-size: 12px;
     font-weight: 700;
   }
 
   .bubble { flex: 1; min-width: 0; }
 
-  .byline { display: flex; gap: 8px; margin: 0 0 2px; font-size: 12px; line-height: 16px; color: var(--text-dim); }
-  .author { font-weight: 600; color: var(--text); }
+  .byline { display: flex; gap: 8px; margin: 0 0 4px; font-size: 13px; line-height: 18px; color: #9fadbc; }
+  .author { font-weight: 600; color: #b6c2cf; }
 
-  /* pre-wrap keeps author line breaks while the text stays plain, never markup. */
   .message {
     margin: 0;
-    padding: 8px;
-    border-radius: 6px;
-    background: var(--stack-bg);
+    padding: 10px 14px;
+    border-radius: 8px;
+    background: #22272b;
+    border: 1px solid #38414a;
+    color: #b6c2cf;
+    font-size: 14px;
     white-space: pre-wrap;
     word-break: break-word;
   }
@@ -258,16 +286,17 @@
     border: 0;
     border-radius: 6px;
     background: #a1bdd914;
-    color: var(--text);
+    color: #b6c2cf;
     font: inherit;
     cursor: pointer;
   }
   .btn:hover:not(:disabled) { background: #a1bdd925; }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .primary { background: var(--accent); color: #1d2125; }
-  .link { padding: 2px 4px; background: transparent; color: var(--text-dim); font-size: 12px; text-decoration: underline; }
-  .link:hover:not(:disabled) { background: transparent; color: var(--text); }
+  .primary { background: #579dff; color: #1d2125; font-weight: 600; }
+  .primary:hover:not(:disabled) { background: #85b8ff; }
+  .link { padding: 2px 4px; background: transparent; color: #9fadbc; font-size: 12px; text-decoration: underline; }
+  .link:hover:not(:disabled) { background: transparent; color: #b6c2cf; }
 
-  .empty, .error { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-dim); }
-  .error { display: flex; align-items: center; gap: 8px; color: var(--danger); }
+  .empty, .error { margin: 0; font-size: 13px; line-height: 18px; color: #9fadbc; }
+  .error { display: flex; align-items: center; gap: 8px; color: #f87171; }
 </style>

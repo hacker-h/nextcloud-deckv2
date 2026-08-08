@@ -104,7 +104,14 @@
 </script>
 
 <section class="attachments">
-  <h3 class="legend">Anhänge</h3>
+  <div class="section-head">
+    <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+      <path d="M10.5 5.5 6 10a1.8 1.8 0 0 0 2.5 2.5l4.5-4.5a3.2 3.2 0 0 0-4.5-4.5L3.6 8.4a4.6 4.6 0 0 0 6.5 6.5"/>
+    </svg>
+    <h3 class="legend">Anhänge</h3>
+    <div class="flex-spacer"></div>
+    <button class="btn add-btn" type="button" onclick={() => input?.click()}>Hinzufügen</button>
+  </div>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -137,8 +144,9 @@
   {/if}
 
   {#if live.length === 0}
-    <p class="hint">Keine Anhänge</p>
+    <p class="hint no-attach">Keine Anhänge</p>
   {:else}
+    <div class="links-subhead">Links</div>
     <ul class="list">
       {#each live as attachment (attachment.id)}
         <li class="item">
@@ -155,12 +163,40 @@
             </button>
             <button class="btn" type="button" onclick={() => (renamingId = null)}>Abbrechen</button>
           {:else}
-            <span class="name">{attachment.name}</span>
+            <svg class="item-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+              <path d="M10.5 5.5 6 10a1.8 1.8 0 0 0 2.5 2.5l4.5-4.5a3.2 3.2 0 0 0-4.5-4.5L3.6 8.4a4.6 4.6 0 0 0 6.5 6.5"/>
+            </svg>
+            <a
+              class="name"
+              href={attachment.data || '#'}
+              target="_blank"
+              rel="noopener noreferrer"
+              onclick={(e) => {
+                if (!attachment.data) {
+                  e.preventDefault();
+                  onDownload?.(attachment);
+                }
+              }}
+            >
+              {attachment.name}
+            </a>
             <span class="meta">{formatSize(attachment.size)}</span>
-            <button class="btn link" type="button" onclick={() => onDownload?.(attachment)}>Herunterladen</button>
-            <button class="btn link" type="button" onclick={() => startRename(attachment)}>Umbenennen</button>
-            <button class="btn link" type="button" disabled={pending} onclick={() => run(() => onDelete?.(attachment))}>
-              Löschen
+            <button class="icon-menu-btn" type="button" onclick={() => onDownload?.(attachment)} title="Herunterladen" aria-label="Herunterladen">
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M2.5 13.5h11"/>
+              </svg>
+            </button>
+            <button class="icon-menu-btn" type="button" onclick={() => startRename(attachment)} title="Umbenennen" aria-label="Umbenennen">
+              <svg viewBox="0 0 16 16" width="14" height="14" fill="currentColor">
+                <circle cx="3" cy="8" r="1.5" />
+                <circle cx="8" cy="8" r="1.5" />
+                <circle cx="13" cy="8" r="1.5" />
+              </svg>
+            </button>
+            <button class="icon-menu-btn" type="button" disabled={pending} onclick={() => run(() => onDelete?.(attachment))} title="Löschen" aria-label="Löschen">
+              <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
+                <path d="M3 4.5h10M6 4.5V3a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v1.5M4.5 4.5v9a1 1 0 0 0 1 1h5a1 1 0 0 0 1-1v-9" />
+              </svg>
             </button>
           {/if}
         </li>
@@ -185,54 +221,109 @@
 <style>
   .attachments { display: flex; flex-direction: column; gap: 12px; }
 
+  .section-head {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #9fadbc;
+  }
+
   .legend {
     margin: 0;
-    font-size: 12px;
-    line-height: 16px;
+    font-size: 16px;
     font-weight: 600;
-    color: var(--text-dim);
-    text-transform: uppercase;
-    letter-spacing: .04em;
+    color: #b6c2cf;
   }
+
+  .flex-spacer { flex: 1; }
+
+  .add-btn {
+    padding: 6px 12px;
+    background: #2c333a;
+    border: 0;
+    border-radius: 6px;
+    color: #b6c2cf;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+  }
+  .add-btn:hover { background: #38414a; color: #ffffff; }
 
   .dropzone {
     display: flex;
     flex-direction: column;
     gap: 8px;
     padding: 12px;
-    border: 1px dashed var(--border);
+    margin-left: 28px;
+    border: 1px dashed #38414a;
     border-radius: 8px;
-    background: var(--stack-bg);
+    background: #22272b;
   }
-  .dragging { border-color: var(--accent); background: var(--card-bg-hover); }
+  .dragging { border-color: #579dff; background: #2c333a; }
 
-  .file { color: var(--text-dim); font: inherit; }
+  .file { color: #9fadbc; font: inherit; }
+
+  .links-subhead {
+    margin-left: 28px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #9fadbc;
+  }
 
   ul { margin: 0; padding: 0; list-style: none; }
-  .list { display: flex; flex-direction: column; gap: 4px; }
+  .list { display: flex; flex-direction: column; gap: 6px; margin-left: 28px; }
   .deleted { opacity: .7; }
 
   .item {
     display: flex;
-    flex-wrap: wrap;
     align-items: center;
-    gap: 8px;
-    padding: 6px 8px;
-    border-radius: 6px;
-    background: var(--stack-bg);
+    gap: 10px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    background: #22272b;
+    border: 1px solid #38414a;
   }
 
-  .name { flex: 1; min-width: 0; word-break: break-all; }
+  .item-icon { color: #9fadbc; flex: 0 0 auto; }
+
+  .name {
+    flex: 1;
+    min-width: 0;
+    color: #579dff;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .name:hover { text-decoration: underline; color: #85b8ff; }
   .struck { text-decoration: line-through; }
-  .meta { font-size: 12px; color: var(--text-dim); }
+
+  .meta { font-size: 12px; color: #9fadbc; }
+
+  .icon-menu-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    background: #2c333a;
+    border: 0;
+    border-radius: 6px;
+    color: #9fadbc;
+    cursor: pointer;
+  }
+  .icon-menu-btn:hover { background: #38414a; color: #ffffff; }
 
   .rename {
     flex: 1;
-    padding: 4px 8px;
-    border: 1px solid var(--accent);
+    padding: 6px 10px;
+    border: 1px solid #579dff;
     border-radius: 6px;
-    background: var(--board-bg);
-    color: var(--text);
+    background: #1d2125;
+    color: #b6c2cf;
     font: inherit;
   }
 
@@ -241,16 +332,16 @@
     border: 0;
     border-radius: 6px;
     background: #a1bdd914;
-    color: var(--text);
+    color: #b6c2cf;
     font: inherit;
     cursor: pointer;
   }
   .btn:hover:not(:disabled) { background: #a1bdd925; }
   .btn:disabled { opacity: .5; cursor: not-allowed; }
-  .primary { background: var(--accent); color: #1d2125; }
-  .link { padding: 2px 4px; background: transparent; color: var(--text-dim); font-size: 12px; text-decoration: underline; }
-  .link:hover:not(:disabled) { background: transparent; color: var(--text); }
+  .primary { background: #579dff; color: #1d2125; font-weight: 600; }
+  .link { padding: 2px 4px; background: transparent; color: #9fadbc; font-size: 12px; text-decoration: underline; }
+  .link:hover:not(:disabled) { background: transparent; color: #b6c2cf; }
 
-  .hint, .error { margin: 0; font-size: 12px; line-height: 16px; color: var(--text-dim); }
-  .error { display: flex; align-items: center; gap: 8px; color: var(--danger); }
+  .hint, .error, .no-attach { margin: 0; margin-left: 28px; font-size: 13px; color: #9fadbc; }
+  .error { display: flex; align-items: center; gap: 8px; color: #f87171; }
 </style>

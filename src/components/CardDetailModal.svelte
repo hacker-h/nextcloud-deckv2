@@ -301,16 +301,17 @@
     align-items: flex-start;
     padding: 48px 16px;
     overflow-y: auto;
-    background: #0e0f1180;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
   }
 
   .dialog {
     width: 100%;
     max-width: 768px;
-    background: var(--card-bg);
-    border-radius: var(--stack-radius);
-    box-shadow: 0 8px 24px #01040466, 0 0 0 1px var(--border);
-    color: var(--text);
+    background: #282e33;
+    border-radius: 12px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
+    color: #b6c2cf;
     outline: none;
   }
 
