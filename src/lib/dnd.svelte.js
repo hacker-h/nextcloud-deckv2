@@ -25,6 +25,31 @@ export const drag = $state({
   overIndex: null,    // insertion index within that stack
 });
 
+export const externalDrop = $state({
+  activeCardId: null,
+  dragType: 'file',
+});
+
+export function setExternalOverCard(cardId, type = 'file') {
+  externalDrop.activeCardId = cardId;
+  externalDrop.dragType = type;
+}
+
+export function clearExternalDrop() {
+  externalDrop.activeCardId = null;
+  externalDrop.dragType = 'file';
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('dragend', clearExternalDrop);
+  window.addEventListener('drop', clearExternalDrop);
+  window.addEventListener('dragleave', (e) => {
+    if (!e.relatedTarget || e.relatedTarget === document.documentElement) {
+      clearExternalDrop();
+    }
+  });
+}
+
 export function resetDrag() {
   drag.active = false;
   drag.cardIds = [];

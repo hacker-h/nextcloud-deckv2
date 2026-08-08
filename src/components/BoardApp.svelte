@@ -3,7 +3,7 @@
   import { createBoardStore } from '../lib/store.svelte.js';
   import { createCardDetailStore } from '../lib/detail.svelte.js';
   import { getBoardAssignmentOptions } from '../lib/assignments.js';
-  import { downloadAttachment } from '../lib/attachments.js';
+  import { downloadAttachment, uploadAttachment, addLinkAttachment } from '../lib/attachments.js';
   import { touch, sortByMru } from '../lib/mru.js';
   import { accessLevel } from '../lib/permissions.js';
   import { applyCardClick, applyShiftClick, emptySelection, orderedSelection } from '../lib/selection.js';
@@ -26,6 +26,34 @@
   const client = new DeckClient({ onUnauthorized: () => onUnauthorized() });
 
   const board = createBoardStore(client);
+
+  let tileToast = $state(null);
+
+  async function handleTileUploadAttachment(card, file) {
+    tileToast = { status: 'uploading', message: 'Datei wird hochgeladen...' };
+    try {
+      await uploadAttachment(client, { boardId: card.boardId, stackId: card.stackId, cardId: card.id }, file);
+      tileToast = { status: 'success', message: 'Erfolgreich' };
+      await board.refresh();
+      setTimeout(() => { tileToast = null; }, 3000);
+    } catch (err) {
+      tileToast = { status: 'error', message: err?.message ?? 'Upload fehlgeschlagen' };
+      setTimeout(() => { tileToast = null; }, 4000);
+    }
+  }
+
+  async function handleTileAttachLink(card, uri) {
+    tileToast = { status: 'uploading', message: 'Link anhängen' };
+    try {
+      await addLinkAttachment(client, { boardId: card.boardId, stackId: card.stackId, cardId: card.id }, uri);
+      tileToast = { status: 'success', message: 'Erfolgreich' };
+      await board.refresh();
+      setTimeout(() => { tileToast = null; }, 3000);
+    } catch (err) {
+      tileToast = { status: 'error', message: err?.message ?? 'Link konnte nicht angehängt werden' };
+      setTimeout(() => { tileToast = null; }, 4000);
+    }
+  }
 
   // Detail saves must repaint the board tile, so the store pushes every fresh
   // card straight back into the board state.
@@ -282,7 +310,20 @@
         {selectedIds}
         {dragIds}
         onClearSelection={clearSelection}
+        onUploadAttachment={handleTileUploadAttachment}
+        onAttachLink={handleTileAttachLink}
       />
+    {/if}
+
+    {#if tileToast}
+      <div class="toast {tileToast.status}" role="status">
+        {#if tileToast.status === 'uploading'}
+          <span class="toast-icon">ℹ</span>
+        {:else if tileToast.status === 'success'}
+          <span class="toast-icon">✓</span>
+        {/if}
+        <span>{tileToast.message}</span>
+      </div>
     {/if}
 
     {#if selectedCount > 0}

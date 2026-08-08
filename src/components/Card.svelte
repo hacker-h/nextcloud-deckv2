@@ -1,5 +1,5 @@
 <script>
-  import { draggable } from '../lib/dnd.svelte.js';
+  import { draggable, externalDrop, setExternalOverCard, clearExternalDrop } from '../lib/dnd.svelte.js';
   import ImageLightbox from './ImageLightbox.svelte';
   import { getChecklistSummary } from '../lib/checklist.js';
   import { isTemplateCard } from '../lib/cards.js';
@@ -8,8 +8,9 @@
 
   let lightboxSrc = $state(null);
   let lightboxTitle = $state('');
-  let isDraggingOver = $state(false);
-  let dragType = $state('file');
+
+  const isDraggingOver = $derived(externalDrop.activeCardId === card.id);
+  const dragType = $derived(externalDrop.dragType);
 
   const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const due = $derived.by(() => {
@@ -34,9 +35,9 @@
   });
 
   const thumbnailUrl = $derived.by(() => {
-    if (!imageAttachment) return null;
-    if (imageAttachment.url) return imageAttachment.url;
-    if (imageAttachment.id && card.boardId && card.stackId && card.id) {
+    if (card.coverUrl) return card.coverUrl;
+    if (imageAttachment) {
+      if (imageAttachment.url) return imageAttachment.url;
       return `/api/v1.0/boards/${card.boardId}/stacks/${card.stackId}/cards/${card.id}/attachments/${imageAttachment.id}/file`;
     }
     return null;
@@ -49,8 +50,6 @@
       lightboxTitle = imageAttachment?.name ?? card.title;
     }
   }
-
-  let dragDepth = $state(0);
 
   function detectDragType(dt) {
     if (!dt) return 'file';
@@ -71,6 +70,7 @@
       e.preventDefault();
       e.stopPropagation();
       e.dataTransfer.dropEffect = 'copy';
+      setExternalOverCard(card.id, detectDragType(dt));
     }
   }
 
@@ -82,26 +82,18 @@
 
     e.preventDefault();
     e.stopPropagation();
-
-    dragDepth += 1;
-    dragType = detectDragType(dt);
-    isDraggingOver = true;
+    setExternalOverCard(card.id, detectDragType(dt));
   }
 
   function onTileDragLeave(e) {
     e.preventDefault();
     e.stopPropagation();
-    dragDepth = Math.max(0, dragDepth - 1);
-    if (dragDepth === 0) {
-      isDraggingOver = false;
-    }
   }
 
   async function onTileDrop(e) {
     e.preventDefault();
     e.stopPropagation();
-    dragDepth = 0;
-    isDraggingOver = false;
+    clearExternalDrop();
 
     const dt = e.dataTransfer;
     if (!dt) return;

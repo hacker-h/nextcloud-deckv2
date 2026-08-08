@@ -2,7 +2,7 @@
   import Stack from './Stack.svelte';
   import DragPreview from './DragPreview.svelte';
 
-  let { stacks, boardId, client, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onClearSelection } = $props();
+  let { stacks, boardId, client, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onClearSelection, onUploadAttachment, onAttachLink } = $props();
 </script>
 
 <!-- Clicking empty board space clears the selection (PLAN.md §6). The handler
@@ -16,7 +16,7 @@
   onpointerdown={(e) => e.target === e.currentTarget && onClearSelection?.()}
 >
   {#each stacks as stack (stack.id)}
-    <Stack {stack} {onDrop} {onOpenCard} {onSelect} {selectedIds} {dragIds} />
+    <Stack {stack} {onDrop} {onOpenCard} {onSelect} {selectedIds} {dragIds} {onUploadAttachment} {onAttachLink} />
   {/each}
 </div>
 
