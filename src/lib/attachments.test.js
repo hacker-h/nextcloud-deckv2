@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeckClient } from './deck.js';
 import {
   DECK_FILE,
+  addLinkAttachment,
   deleteAttachment,
   downloadAttachment,
   listAttachments,
@@ -153,5 +154,17 @@ describe('attachment operations', () => {
     expect(fetch.mock.calls[0][0]).toBe(`${BASE}/88`);
     expect(fetch.mock.calls[0][0]).not.toContain('app-password');
     expect(fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
+  });
+
+  it('attaches a link as deck_link multipart', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(serverAttachment({ type: 'deck_link', data: 'https://example.com' })));
+
+    const attached = await addLinkAttachment(client(), TARGET, 'https://example.com');
+
+    const [url, init] = fetch.mock.calls[0];
+    expect(url).toBe(BASE);
+    expect(init.method).toBe('POST');
+    expect(init.body.get('type')).toBe('deck_link');
+    expect(init.body.get('link')).toBe('https://example.com');
   });
 });

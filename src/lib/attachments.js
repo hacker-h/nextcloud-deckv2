@@ -22,6 +22,15 @@ export async function uploadAttachment(client, target, file, { type = DECK_FILE,
   return normalizeAttachment(r.data);
 }
 
+export async function addLinkAttachment(client, target, linkUrl, { signal } = {}) {
+  const form = new FormData();
+  form.append('type', 'deck_link');
+  form.append('link', linkUrl);
+
+  const r = await client.deck(path(target), { method: 'POST', body: form, signal });
+  return normalizeAttachment(r.data);
+}
+
 export async function updateAttachment(client, target, attachmentId, file, { type = DECK_FILE, signal } = {}) {
   const form = new FormData();
   form.append('type', type);

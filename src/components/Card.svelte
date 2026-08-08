@@ -2,10 +2,12 @@
   import { draggable } from '../lib/dnd.svelte.js';
   import ImageLightbox from './ImageLightbox.svelte';
 
-  let { card, onDrop, onOpenCard, onSelect, selected = false, selectionMode = false, dragIds } = $props();
+  let { card, onDrop, onOpenCard, onSelect, selected = false, selectionMode = false, dragIds, onUploadAttachment, onAttachLink } = $props();
 
   let lightboxSrc = $state(null);
   let lightboxTitle = $state('');
+  let isDraggingOver = $state(false);
+  let dragType = $state('file');
 
   const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const due = $derived.by(() => {
@@ -44,6 +46,56 @@
     }
   }
 
+  function onTileDragOver(e) {
+    const dt = e.dataTransfer;
+    if (dt?.types?.includes('Files') || dt?.types?.includes('text/uri-list') || dt?.types?.includes('text/plain')) {
+      e.preventDefault();
+      e.stopPropagation();
+      isDraggingOver = true;
+    }
+  }
+
+  function onTileDragEnter(e) {
+    const dt = e.dataTransfer;
+    if (dt?.types?.includes('Files') || dt?.types?.includes('text/uri-list') || dt?.types?.includes('text/plain')) {
+      e.preventDefault();
+      e.stopPropagation();
+      if (dt.types.includes('text/uri-list')) dragType = 'link';
+      else dragType = 'file';
+      isDraggingOver = true;
+    }
+  }
+
+  function onTileDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.target === e.currentTarget || !e.relatedTarget) {
+      isDraggingOver = false;
+    }
+  }
+
+  async function onTileDrop(e) {
+    const dt = e.dataTransfer;
+    if (!dt?.files?.length && !dt?.getData('text/uri-list') && !dt?.getData('text/plain')) {
+      return;
+    }
+
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingOver = false;
+
+    const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
+    if (uri && /^https?:\/\/[^\s]+$/i.test(uri.trim()) && onAttachLink) {
+      await onAttachLink(card, uri.trim());
+      return;
+    }
+
+    const file = dt.files?.[0];
+    if (file && onUploadAttachment) {
+      await onUploadAttachment(card, file);
+    }
+  }
+
   // Keyboard activation bypasses the pointer gesture machine entirely: there is
   // no drag to disambiguate, so Enter/Space open the card directly.
   function onKeydown(e) {
@@ -62,6 +114,10 @@
   aria-pressed={selected}
   data-card-id={card.id}
   onkeydown={onKeydown}
+  ondragenter={onTileDragEnter}
+  ondragover={onTileDragOver}
+  ondragleave={onTileDragLeave}
+  ondrop={onTileDrop}
   use:draggable={() => ({
     card,
     onDrop,
@@ -70,6 +126,11 @@
     onSelect: () => onSelect?.({ card }),
   })}
 >
+  {#if isDraggingOver}
+    <div class="card-drop-overlay" role="presentation">
+      <span>{dragType === 'link' ? 'Link anhängen' : 'Dateien für Upload ablegen.'}</span>
+    </div>
+  {/if}
   <div class="inner">
     {#if selectionMode || selected}
       <div class="checkbox" class:checked={selected} aria-hidden="true">
@@ -260,4 +321,21 @@
   .badge svg { display: block; }
   .due { padding: 2px 4px; border-radius: 4px; }
   .overdue { background: #5D1F1A; color: #FD9891; }
+
+  .card-drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 10;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 6px;
+    background: rgba(0, 95, 204, 0.92);
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+    border-radius: var(--card-radius);
+    pointer-events: none;
+  }
 </style>

@@ -11,6 +11,7 @@
     onSave,
     onDiscard,
     onUploadAttachment,
+    onAttachLink,
     main,
     sidebar,
   } = $props();
@@ -21,6 +22,8 @@
   let dialog = $state(null);
   let confirming = $state(false);
   let toast = $state(null);
+  let isDraggingOver = $state(false);
+  let dragType = $state('file');
 
   const titleId = 'card-detail-title';
 
@@ -88,33 +91,110 @@
   }
 
   async function handlePaste(e) {
-    if (!onUploadAttachment) return;
-    const items = e.clipboardData?.items;
-    if (!items?.length) return;
+    if (!onUploadAttachment && !onAttachLink) return;
 
+    // Check for file items first
+    const items = e.clipboardData?.items;
     let fileToUpload = null;
-    for (const item of items) {
-      if (item.kind === 'file') {
-        fileToUpload = item.getAsFile();
-        break;
+    if (items) {
+      for (const item of items) {
+        if (item.kind === 'file') {
+          fileToUpload = item.getAsFile();
+          break;
+        }
       }
     }
 
-    if (!fileToUpload) return;
-    e.preventDefault();
+    if (fileToUpload) {
+      e.preventDefault();
+      let file = fileToUpload;
+      if (!file.name || file.name === 'image.png') {
+        const ext = (file.type.split('/')[1] || 'png').replace('+xml', '');
+        file = new File([fileToUpload], `pasted-image-${Date.now()}.${ext}`, { type: fileToUpload.type });
+      }
 
-    let file = fileToUpload;
-    if (!file.name || file.name === 'image.png') {
-      const ext = (file.type.split('/')[1] || 'png').replace('+xml', '');
-      file = new File([fileToUpload], `pasted-image-${Date.now()}.${ext}`, { type: fileToUpload.type });
+      toast = { status: 'uploading', message: 'Datei wird hochgeladen ...' };
+      try {
+        await onUploadAttachment?.(file);
+        toast = { status: 'success', message: 'Erfolgreich' };
+      } catch (err) {
+        toast = { status: 'error', message: err?.message ?? 'Upload fehlgeschlagen' };
+      }
+      return;
     }
 
-    toast = { status: 'uploading', message: 'Datei wird hochgeladen ...' };
-    try {
-      await onUploadAttachment(file);
-      toast = { status: 'success', message: 'Erfolgreich' };
-    } catch (err) {
-      toast = { status: 'error', message: err?.message ?? 'Upload fehlgeschlagen' };
+    // Check for text URL paste
+    const active = document.activeElement;
+    const isTextInput = active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA');
+
+    const pastedText = e.clipboardData?.getData('text/plain')?.trim();
+    if (pastedText && /^https?:\/\/[^\s]+$/i.test(pastedText) && !isTextInput && onAttachLink) {
+      e.preventDefault();
+      toast = { status: 'uploading', message: 'Link anhängen ...' };
+      try {
+        await onAttachLink(pastedText);
+        toast = { status: 'success', message: 'Erfolgreich' };
+      } catch (err) {
+        toast = { status: 'error', message: err?.message ?? 'Link konnte nicht angehängt werden' };
+      }
+    }
+  }
+
+  function onModalDragOver(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingOver = true;
+  }
+
+  function onModalDragEnter(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    const dt = e.dataTransfer;
+    if (dt?.types?.includes('text/uri-list') || dt?.types?.includes('text/plain')) {
+      dragType = 'link';
+    } else {
+      dragType = 'file';
+    }
+    isDraggingOver = true;
+  }
+
+  function onModalDragLeave(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.target === e.currentTarget || !e.relatedTarget) {
+      isDraggingOver = false;
+    }
+  }
+
+  async function onModalDrop(e) {
+    e.preventDefault();
+    e.stopPropagation();
+    isDraggingOver = false;
+
+    const dt = e.dataTransfer;
+    if (!dt) return;
+
+    const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
+    if (uri && /^https?:\/\/[^\s]+$/i.test(uri.trim()) && onAttachLink) {
+      toast = { status: 'uploading', message: 'Link anhängen ...' };
+      try {
+        await onAttachLink(uri.trim());
+        toast = { status: 'success', message: 'Erfolgreich' };
+      } catch (err) {
+        toast = { status: 'error', message: err?.message ?? 'Link konnte nicht angehängt werden' };
+      }
+      return;
+    }
+
+    const file = dt.files?.[0];
+    if (file && onUploadAttachment) {
+      toast = { status: 'uploading', message: 'Datei wird hochgeladen ...' };
+      try {
+        await onUploadAttachment(file);
+        toast = { status: 'success', message: 'Erfolgreich' };
+      } catch (err) {
+        toast = { status: 'error', message: err?.message ?? 'Upload fehlgeschlagen' };
+      }
     }
   }
 
@@ -137,7 +217,15 @@
 
 <svelte:window onkeydown={onKeydown} onpaste={handlePaste} />
 
-<div class="backdrop" role="presentation" onpointerdown={onBackdrop}>
+<div
+  class="backdrop"
+  role="presentation"
+  onpointerdown={onBackdrop}
+  ondragenter={onModalDragEnter}
+  ondragover={onModalDragOver}
+  ondragleave={onModalDragLeave}
+  ondrop={onModalDrop}
+>
   <div
     class="dialog"
     role="dialog"
@@ -147,6 +235,16 @@
     tabindex="-1"
     bind:this={dialog}
   >
+    {#if isDraggingOver}
+      <div class="drop-overlay" role="presentation">
+        <div class="drop-box">
+          <svg viewBox="0 0 16 16" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M2.5 13.5h11"/>
+          </svg>
+          <span>{dragType === 'link' ? 'Link anhängen' : 'Dateien für Upload ablegen.'}</span>
+        </div>
+      </div>
+    {/if}
     <header class="head">
       <h2 class="title" id={titleId}>{card?.title ?? 'Card'}</h2>
       <button class="icon" type="button" onclick={requestClose} aria-label="Kartendetails schließen">
@@ -277,6 +375,31 @@
     padding: 12px 16px;
     border-top: 1px solid var(--border);
   }
+
+  .drop-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(15, 23, 42, 0.85);
+    border: 2px dashed #005fcc;
+    border-radius: var(--modal-radius, 12px);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+  }
+
+  .drop-box {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    color: #ffffff;
+    font-size: 16px;
+    font-weight: 600;
+  }
+
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
   .skeleton { background: #a1bdd914; border-radius: 6px; }
