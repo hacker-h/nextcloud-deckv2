@@ -130,4 +130,20 @@ describe('CardDetailModal', () => {
     expect(container.querySelector('a')).toBeNull();
     expect(container.innerHTML).not.toContain('apps/deck');
   });
+
+  it('uploads a file pasted from the clipboard and displays Toast notification', async () => {
+    const onUploadAttachment = vi.fn().mockResolvedValue(undefined);
+    open({ onUploadAttachment });
+
+    const file = new File(['image-data'], 'pasted-screen.png', { type: 'image/png' });
+    const pasteEvent = new Event('paste', { bubbles: true, cancelable: true });
+    Object.defineProperty(pasteEvent, 'clipboardData', {
+      value: { items: [{ kind: 'file', getAsFile: () => file }] },
+    });
+
+    await fireEvent(window, pasteEvent);
+
+    expect(onUploadAttachment).toHaveBeenCalledWith(expect.objectContaining({ name: 'pasted-screen.png' }));
+    expect(screen.getByRole('status')).toHaveTextContent('Erfolgreich');
+  });
 });

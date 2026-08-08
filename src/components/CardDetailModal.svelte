@@ -1,4 +1,6 @@
 <script>
+  import Toast from './Toast.svelte';
+
   let {
     card = null,
     loading = false,
@@ -8,6 +10,7 @@
     onRetry,
     onSave,
     onDiscard,
+    onUploadAttachment,
     main,
     sidebar,
   } = $props();
@@ -17,6 +20,7 @@
 
   let dialog = $state(null);
   let confirming = $state(false);
+  let toast = $state(null);
 
   const titleId = 'card-detail-title';
 
@@ -83,6 +87,37 @@
     if (e.key === 'Tab') trapTab(e);
   }
 
+  async function handlePaste(e) {
+    if (!onUploadAttachment) return;
+    const items = e.clipboardData?.items;
+    if (!items?.length) return;
+
+    let fileToUpload = null;
+    for (const item of items) {
+      if (item.kind === 'file') {
+        fileToUpload = item.getAsFile();
+        break;
+      }
+    }
+
+    if (!fileToUpload) return;
+    e.preventDefault();
+
+    let file = fileToUpload;
+    if (!file.name || file.name === 'image.png') {
+      const ext = (file.type.split('/')[1] || 'png').replace('+xml', '');
+      file = new File([fileToUpload], `pasted-image-${Date.now()}.${ext}`, { type: fileToUpload.type });
+    }
+
+    toast = { status: 'uploading', message: 'Datei wird hochgeladen ...' };
+    try {
+      await onUploadAttachment(file);
+      toast = { status: 'success', message: 'Erfolgreich' };
+    } catch (err) {
+      toast = { status: 'error', message: err?.message ?? 'Upload fehlgeschlagen' };
+    }
+  }
+
   function onBackdrop(e) {
     if (e.target === e.currentTarget) requestClose();
   }
@@ -100,7 +135,7 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
+<svelte:window onkeydown={onKeydown} onpaste={handlePaste} />
 
 <div class="backdrop" role="presentation" onpointerdown={onBackdrop}>
   <div
@@ -151,6 +186,10 @@
     {/if}
   </div>
 </div>
+
+{#if toast}
+  <Toast status={toast.status} message={toast.message} onClose={() => (toast = null)} />
+{/if}
 
 <style>
   .backdrop {
