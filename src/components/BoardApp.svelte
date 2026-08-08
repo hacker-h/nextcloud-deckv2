@@ -222,6 +222,7 @@
           {board.state.pending} saving…
         </span>
       {/if}
+      <span class="build" title={__BUILD_TIME__}>{__BUILD_SHA__}</span>
       <!-- Plain text beats an avatar menu here: the topbar is dense, and one action
         does not justify hiding the signed-in username behind another interaction. -->
       <div class="account" title={`Signed in as ${currentUser}`} aria-label={`Signed in as ${currentUser}`}>
@@ -415,6 +416,7 @@
     z-index: 30;
   }
   .stat { font-size: 12px; color: var(--text-dim); }
+  .build { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .current-access { flex: 0 0 auto; }
   .pending { font-size: 12px; color: var(--accent); }
 

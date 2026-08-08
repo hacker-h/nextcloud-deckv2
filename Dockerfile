@@ -3,6 +3,8 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+ARG BUILD_SHA
+ENV BUILD_SHA=$BUILD_SHA
 RUN npm run build
 
 FROM node:22-alpine

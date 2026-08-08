@@ -1,8 +1,10 @@
 import { defineConfig } from 'vite';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { buildDefines } from './build-info.js';
 
 export default defineConfig({
   plugins: [svelte()],
+  define: buildDefines,
   server: {
     port: 5173,
     proxy: {

@@ -47,6 +47,17 @@ describe('BoardApp account header', () => {
     expect(screen.getByText('alice')).toBeInTheDocument();
   });
 
+  it('renders the build SHA badge in the header', () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(json([]));
+
+    render(BoardApp, { props: { currentUser: 'alice' } });
+
+    // A blank or 'unknown' badge is the failure this feature exists to catch,
+    // so assert the shape rather than merely that the element rendered.
+    expect(__BUILD_SHA__).toMatch(/^[0-9a-f]{7,40}$/);
+    expect(screen.getByText(__BUILD_SHA__)).toHaveAttribute('title', __BUILD_TIME__);
+  });
+
   it('calls onSignOut exactly once from the header control', async () => {
     vi.spyOn(globalThis, 'fetch').mockResolvedValue(json([]));
     const onSignOut = vi.fn();

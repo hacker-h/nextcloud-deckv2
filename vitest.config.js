@@ -1,8 +1,10 @@
 import { defineConfig } from 'vitest/config';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
+import { buildDefines } from './build-info.js';
 
 export default defineConfig({
   plugins: [svelte({ hot: false })],
+  define: buildDefines,
   test: {
     projects: [
       {
