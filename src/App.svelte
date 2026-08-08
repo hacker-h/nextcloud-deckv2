@@ -38,7 +38,27 @@
   />
 {/if}
 
+<aside class="version-tag" title={`Erstellt am ${__BUILD_TIME__}`}>
+  v{__APP_VERSION__} ({__BUILD_SHA__})
+</aside>
+
 <style>
+  .version-tag {
+    position: fixed;
+    bottom: 8px;
+    right: 12px;
+    z-index: 9999;
+    padding: 2px 7px;
+    font-size: 11px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    color: var(--text-dim);
+    background: rgba(16, 18, 20, 0.75);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+    user-select: all;
+  }
   .splash {
     min-height: 100%;
     display: grid;

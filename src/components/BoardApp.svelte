@@ -242,7 +242,7 @@
           {board.state.pending} wird gespeichert…
         </span>
       {/if}
-      <span class="build" title={__BUILD_TIME__}>{__BUILD_SHA__}</span>
+      <span class="build" title={`Erstellt am ${__BUILD_TIME__}`}>v{__APP_VERSION__} ({__BUILD_SHA__})</span>
       <!-- Plain text beats an avatar menu here: the topbar is dense, and one action
         does not justify hiding the signed-in username behind another interaction. -->
       <div class="account" title={`Angemeldet als ${currentUser}`} aria-label={`Angemeldet als ${currentUser}`}>

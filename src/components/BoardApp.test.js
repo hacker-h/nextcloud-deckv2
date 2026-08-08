@@ -55,7 +55,7 @@ describe('BoardApp account header', () => {
     // A blank or 'unknown' badge is the failure this feature exists to catch,
     // so assert the shape rather than merely that the element rendered.
     expect(__BUILD_SHA__).toMatch(/^[0-9a-f]{7,40}$/);
-    expect(screen.getByText(__BUILD_SHA__)).toHaveAttribute('title', __BUILD_TIME__);
+    expect(screen.getByText(new RegExp(__BUILD_SHA__))).toHaveAttribute('title', expect.stringContaining(__BUILD_TIME__));
   });
 
   it('calls onSignOut exactly once from the header control', async () => {
