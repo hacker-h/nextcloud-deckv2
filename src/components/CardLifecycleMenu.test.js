@@ -14,25 +14,25 @@ function setup(props = {}) {
   return handlers;
 }
 
-const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Actions' }));
+const openMenu = () => fireEvent.click(screen.getByRole('button', { name: 'Aktionen' }));
 
 describe('CardLifecycleMenu', () => {
   it('requires confirmation before archiving', async () => {
     const { onArchive } = setup();
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Archive card' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte archivieren' }));
 
     expect(onArchive).not.toHaveBeenCalled();
-    expect(screen.getByRole('alertdialog')).toHaveTextContent('Archive "Detail QA"?');
+    expect(screen.getByRole('alertdialog')).toHaveTextContent('"Detail QA" archivieren?');
   });
 
   it('dispatches no request when archive is cancelled', async () => {
     const { onArchive } = setup();
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Archive card' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte archivieren' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
 
     expect(onArchive).not.toHaveBeenCalled();
     expect(screen.queryByRole('alertdialog')).toBeNull();
@@ -42,8 +42,8 @@ describe('CardLifecycleMenu', () => {
     const { onArchive } = setup();
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Archive card' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte archivieren' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Archivieren' }));
 
     expect(onArchive).toHaveBeenCalledTimes(1);
   });
@@ -52,9 +52,9 @@ describe('CardLifecycleMenu', () => {
     const { onUnarchive } = setup({ card: { ...card, archived: true } });
 
     await openMenu();
-    expect(screen.queryByRole('menuitem', { name: 'Archive card' })).toBeNull();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Unarchive card' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Unarchive' }));
+    expect(screen.queryByRole('menuitem', { name: 'Karte archivieren' })).toBeNull();
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte wiederherstellen' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
 
     expect(onUnarchive).toHaveBeenCalledTimes(1);
   });
@@ -63,23 +63,23 @@ describe('CardLifecycleMenu', () => {
     const { onDelete } = setup();
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Delete card' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
 
     expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Delete card' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Karte löschen' })).toBeDisabled();
   });
 
   it('keeps delete blocked when the typed title does not match', async () => {
     const { onDelete } = setup();
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Delete card' }));
-    await fireEvent.input(screen.getByLabelText('Confirm card title'), {
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
+    await fireEvent.input(screen.getByLabelText('Kartentitel bestätigen'), {
       target: { value: 'Detail Q' },
     });
 
-    expect(screen.getByRole('button', { name: 'Delete card' })).toBeDisabled();
-    await fireEvent.click(screen.getByRole('button', { name: 'Delete card' }));
+    expect(screen.getByRole('button', { name: 'Karte löschen' })).toBeDisabled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Karte löschen' }));
     expect(onDelete).not.toHaveBeenCalled();
   });
 
@@ -87,11 +87,11 @@ describe('CardLifecycleMenu', () => {
     const { onDelete } = setup();
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Delete card' }));
-    await fireEvent.input(screen.getByLabelText('Confirm card title'), {
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
+    await fireEvent.input(screen.getByLabelText('Kartentitel bestätigen'), {
       target: { value: 'Detail QA' },
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Delete card' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Karte löschen' }));
 
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
@@ -100,10 +100,10 @@ describe('CardLifecycleMenu', () => {
     setup();
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Delete card' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
 
     expect(screen.getByRole('alertdialog')).toHaveTextContent(
-      'cannot be undone in Deck v2 — the API provides no way to restore a deleted card',
+      'kann nicht rückgängig gemacht werden',
     );
   });
 
@@ -113,11 +113,11 @@ describe('CardLifecycleMenu', () => {
     setup({ onDelete });
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Delete card' }));
-    await fireEvent.input(screen.getByLabelText('Confirm card title'), {
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
+    await fireEvent.input(screen.getByLabelText('Kartentitel bestätigen'), {
       target: { value: 'Detail QA' },
     });
-    const button = screen.getByRole('button', { name: 'Delete card' });
+    const button = screen.getByRole('button', { name: 'Karte löschen' });
     await fireEvent.click(button);
     await fireEvent.click(button);
 
@@ -130,8 +130,8 @@ describe('CardLifecycleMenu', () => {
     setup({ onArchive, error: 'Request failed with status 403' });
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Archive card' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Archive' }));
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte archivieren' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Archivieren' }));
 
     expect(onArchive).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
@@ -143,11 +143,11 @@ describe('CardLifecycleMenu', () => {
     setup({ onDelete, error: 'Request failed with status 500' });
 
     await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Delete card' }));
-    await fireEvent.input(screen.getByLabelText('Confirm card title'), {
+    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
+    await fireEvent.input(screen.getByLabelText('Kartentitel bestätigen'), {
       target: { value: 'Detail QA' },
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Delete card' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Karte löschen' }));
 
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();

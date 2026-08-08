@@ -37,13 +37,13 @@
 
 <div class="switcher">
   <button class="trigger" onclick={toggle} aria-expanded={open}>
-    <span class="name">{current?.title ?? 'Select board'}</span>
+    <span class="name">{current?.title ?? 'Board auswählen'}</span>
     <span class="caret" class:up={open}>▾</span>
   </button>
 
   {#if open}
     <!-- Click-away backdrop -->
-    <button class="backdrop" onclick={() => (open = false)} aria-label="Close"></button>
+    <button class="backdrop" onclick={() => (open = false)} aria-label="Schließen"></button>
 
     <div class="menu">
       <input
@@ -52,7 +52,7 @@
         {onkeydown}
         class="search"
         type="text"
-        placeholder="Search boards…"
+        placeholder="Board suchen…"
       />
       <ul class="list">
         {#each filtered as board (board.id)}
@@ -68,7 +68,7 @@
             </button>
           </li>
         {:else}
-          <li class="none">No matches</li>
+          <li class="none">Keine Treffer</li>
         {/each}
       </ul>
     </div>

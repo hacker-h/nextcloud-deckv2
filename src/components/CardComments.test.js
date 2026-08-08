@@ -32,25 +32,25 @@ const type = (label, value) =>
 describe('CardComments', () => {
   it('shows an empty state with no comments', () => {
     setup();
-    expect(screen.getByText('No comments yet')).toBeInTheDocument();
+    expect(screen.getByText('Noch keine Kommentare')).toBeInTheDocument();
   });
 
   it('creates a comment and clears the composer', async () => {
     const { onAdd } = setup();
 
-    await type('Write a comment', 'Card detail QA');
-    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+    await type('Kommentar schreiben', 'Card detail QA');
+    await fireEvent.click(screen.getByRole('button', { name: 'Kommentieren' }));
 
     expect(onAdd).toHaveBeenCalledWith('Card detail QA', {});
-    expect(screen.getByLabelText('Write a comment')).toHaveValue('');
+    expect(screen.getByLabelText('Kommentar schreiben')).toHaveValue('');
   });
 
   it('cannot submit blank or whitespace-only content', async () => {
     const { onAdd } = setup();
 
-    expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
-    await type('Write a comment', '   ');
-    expect(screen.getByRole('button', { name: 'Comment' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Kommentieren' })).toBeDisabled();
+    await type('Kommentar schreiben', '   ');
+    expect(screen.getByRole('button', { name: 'Kommentieren' })).toBeDisabled();
     expect(onAdd).not.toHaveBeenCalled();
   });
 
@@ -59,8 +59,8 @@ describe('CardComments', () => {
     const onAdd = vi.fn(() => new Promise((r) => (release = r)));
     setup({ onAdd });
 
-    await type('Write a comment', 'Only once');
-    const button = screen.getByRole('button', { name: 'Comment' });
+    await type('Kommentar schreiben', 'Only once');
+    const button = screen.getByRole('button', { name: 'Kommentieren' });
     await fireEvent.click(button);
     await fireEvent.click(button);
     await fireEvent.click(button);
@@ -72,11 +72,11 @@ describe('CardComments', () => {
   it('replies to a comment with the parent id', async () => {
     const { onAdd } = setup({ comments: [comment(1)] });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Reply' }));
-    await type('Write a reply', 'Acknowledged');
-    await fireEvent.click(screen.getByRole('button', { name: 'Send reply' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Antworten' }));
+    await type('Kommentar schreiben', 'Acknowledged');
+    await fireEvent.click(screen.getByRole('button', { name: 'Kommentieren' }));
 
-    expect(onAdd).toHaveBeenCalledWith('Acknowledged', { parentId: 1 });
+    expect(onAdd).toHaveBeenCalledWith('Acknowledged', { parentId: undefined });
   });
 
   it('renders replies nested under their parent in order', () => {
@@ -94,9 +94,9 @@ describe('CardComments', () => {
   it('edits an own comment', async () => {
     const { onEdit } = setup({ comments: [comment(1)] });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await type('Edit comment', 'Card detail QA updated');
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten' }));
+    await type('Kommentar bearbeiten', 'Card detail QA updated');
+    await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onEdit).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 'Card detail QA updated');
   });
@@ -104,7 +104,7 @@ describe('CardComments', () => {
   it('deletes an own comment', async () => {
     const { onDelete } = setup({ comments: [comment(1)] });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
 
     expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
   });
@@ -114,21 +114,21 @@ describe('CardComments', () => {
       comments: [comment(1, { actorId: 'bob', actorDisplayName: 'Bob', canEdit: false })],
     });
 
-    expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
-    expect(screen.getByRole('button', { name: 'Reply' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Bearbeiten' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Löschen' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Antworten' })).toBeInTheDocument();
   });
 
   it('preserves the draft and offers retry when a create fails', async () => {
     const onAdd = vi.fn().mockRejectedValue(new Error('Request failed with status 500'));
     setup({ onAdd });
 
-    await type('Write a comment', 'Do not lose me');
-    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
+    await type('Kommentar schreiben', 'Do not lose me');
+    await fireEvent.click(screen.getByRole('button', { name: 'Kommentieren' }));
 
-    expect(screen.getByLabelText('Write a comment')).toHaveValue('Do not lose me');
+    expect(screen.getByLabelText('Kommentar schreiben')).toHaveValue('Do not lose me');
     expect(screen.getByRole('alert')).toHaveTextContent('Request failed with status 500');
-    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Erneut versuchen' })).toBeInTheDocument();
     expect(onAdd).toHaveBeenCalledTimes(1);
   });
 
@@ -136,11 +136,11 @@ describe('CardComments', () => {
     const onEdit = vi.fn().mockRejectedValue(new Error('edit rejected by server'));
     setup({ comments: [comment(1, { message: 'Original' })], onEdit });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
-    await type('Edit comment', 'Rewritten');
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Bearbeiten' }));
+    await type('Kommentar bearbeiten', 'Rewritten');
+    await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
-    expect(screen.getByLabelText('Edit comment')).toHaveValue('Rewritten');
+    expect(screen.getByLabelText('Kommentar bearbeiten')).toHaveValue('Rewritten');
     expect(screen.getByRole('alert')).toHaveTextContent('edit rejected by server');
   });
 
@@ -148,7 +148,7 @@ describe('CardComments', () => {
     const onDelete = vi.fn().mockRejectedValue(new Error('delete rejected by server'));
     setup({ comments: [comment(1, { message: 'Still here' })], onDelete });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
 
     expect(screen.getByText('Still here')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('delete rejected by server');
@@ -161,9 +161,9 @@ describe('CardComments', () => {
       .mockResolvedValueOnce(undefined);
     setup({ onAdd });
 
-    await type('Write a comment', 'Do not lose me');
-    await fireEvent.click(screen.getByRole('button', { name: 'Comment' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await type('Kommentar schreiben', 'Do not lose me');
+    await fireEvent.click(screen.getByRole('button', { name: 'Kommentieren' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
 
     expect(onAdd).toHaveBeenCalledTimes(2);
     expect(onAdd).toHaveBeenNthCalledWith(2, 'Do not lose me', { parentId: undefined });

@@ -83,15 +83,15 @@ describe('CardDetailModal', () => {
 
     await fireEvent.pointerDown(container.querySelector('.backdrop'));
     expect(onClose).not.toHaveBeenCalled();
-    expect(screen.getByText('You have unsaved changes.')).toBeInTheDocument();
+    expect(screen.getByText('Sie haben ungespeicherte Änderungen.')).toBeInTheDocument();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Continue editing' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Weiter bearbeiten' }));
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog')).toBeInTheDocument();
 
     await fireEvent.keyDown(window, { key: 'Escape' });
-    await fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Verwerfen' }));
     expect(onDiscard).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
   });
@@ -102,7 +102,7 @@ describe('CardDetailModal', () => {
     open({ dirty: true, onSave, onClose });
 
     await fireEvent.keyDown(window, { key: 'Escape' });
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -120,7 +120,7 @@ describe('CardDetailModal', () => {
     open({ error: 'Could not load this card', onRetry });
 
     expect(screen.getByRole('alert')).toHaveTextContent('Could not load this card');
-    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
 

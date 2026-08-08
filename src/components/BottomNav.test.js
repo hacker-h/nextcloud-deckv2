@@ -9,7 +9,7 @@ describe('BottomNav', () => {
   it('offers the inbox, planner, board and switcher views', () => {
     render(BottomNav, { props: {} });
 
-    for (const name of ['Inbox', 'Planner', 'Board', 'Switch boards']) {
+    for (const name of ['Posteingang', 'Planer', 'Board', 'Boards wechseln']) {
       expect(tab(name)).toBeInTheDocument();
     }
   });
@@ -32,17 +32,17 @@ describe('BottomNav', () => {
 
   it('reflects whether the inbox is open', () => {
     const { rerender } = render(BottomNav, { props: { inboxOpen: true } });
-    expect(tab('Inbox')).toHaveAttribute('aria-pressed', 'true');
+    expect(tab('Posteingang')).toHaveAttribute('aria-pressed', 'true');
 
     rerender({ inboxOpen: false });
-    expect(tab('Inbox')).toHaveAttribute('aria-pressed', 'false');
+    expect(tab('Posteingang')).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('toggles the inbox', async () => {
     const onInbox = vi.fn();
     render(BottomNav, { props: { onInbox } });
 
-    await userEvent.click(tab('Inbox'));
+    await userEvent.click(tab('Posteingang'));
 
     expect(onInbox).toHaveBeenCalledTimes(1);
   });
@@ -51,7 +51,7 @@ describe('BottomNav', () => {
     const onSwitchBoards = vi.fn();
     const { rerender } = render(BottomNav, { props: { onSwitchBoards } });
 
-    const button = tab('Switch boards');
+    const button = tab('Boards wechseln');
     expect(button).toHaveAttribute('aria-haspopup', 'menu');
     expect(button).toHaveAttribute('aria-expanded', 'false');
 
@@ -59,12 +59,12 @@ describe('BottomNav', () => {
     expect(onSwitchBoards).toHaveBeenCalledTimes(1);
 
     rerender({ onSwitchBoards, switcherOpen: true });
-    expect(tab('Switch boards')).toHaveAttribute('aria-expanded', 'true');
+    expect(tab('Boards wechseln')).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('keeps the planner inert until calendar sync exists', async () => {
     render(BottomNav, { props: {} });
 
-    expect(tab('Planner')).toBeDisabled();
+    expect(tab('Planer')).toBeDisabled();
   });
 });

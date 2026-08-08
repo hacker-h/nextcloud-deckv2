@@ -48,7 +48,7 @@
     aria-haspopup="menu"
     onclick={() => (open = !open)}
   >
-    Actions
+    Aktionen
   </button>
 
   {#if open}
@@ -56,47 +56,46 @@
       <li>
         {#if archived}
           <button class="item" type="button" role="menuitem" onclick={() => start('unarchive')}>
-            Unarchive card
+            Karte wiederherstellen
           </button>
         {:else}
           <button class="item" type="button" role="menuitem" onclick={() => start('archive')}>
-            Archive card
+            Karte archivieren
           </button>
         {/if}
       </li>
       <li>
         <button class="item danger" type="button" role="menuitem" onclick={() => start('delete')}>
-          Delete card
+          Karte löschen
         </button>
       </li>
     </ul>
   {/if}
 
   {#if confirming === 'archive' || confirming === 'unarchive'}
-    <div class="confirm" role="alertdialog" aria-label="Confirm {confirming}">
+    <div class="confirm" role="alertdialog" aria-label="{confirming} bestätigen">
       <p class="copy">
         {confirming === 'archive'
-          ? `Archive "${title}"? It leaves the board and stays available in the archive.`
-          : `Unarchive "${title}"? It returns to its list.`}
+          ? `"${title}" archivieren? Die Karte verlässt das Board und bleibt im Archiv verfügbar.`
+          : `"${title}" wiederherstellen? Die Karte kehrt in ihre Liste zurück.`}
       </p>
       <div class="actions">
         <button class="btn primary" type="button" disabled={pending} onclick={confirm}>
-          {pending ? 'Working…' : confirming === 'archive' ? 'Archive' : 'Unarchive'}
+          {pending ? 'Wird verarbeitet…' : confirming === 'archive' ? 'Archivieren' : 'Wiederherstellen'}
         </button>
-        <button class="btn" type="button" onclick={cancel}>Cancel</button>
+        <button class="btn" type="button" onclick={cancel}>Abbrechen</button>
       </div>
     </div>
   {/if}
 
   {#if confirming === 'delete'}
-    <div class="confirm" role="alertdialog" aria-label="Confirm delete">
+    <div class="confirm" role="alertdialog" aria-label="Löschen bestätigen">
       <p class="copy danger-text">
-        Deleting "{title}" cannot be undone in Deck v2 — the API provides no way to restore a
-        deleted card.
+        Das Löschen von "{title}" kann nicht rückgängig gemacht werden.
       </p>
       <label class="field">
-        <span class="copy">Type the card title to confirm</span>
-        <input class="input" type="text" aria-label="Confirm card title" bind:value={typedTitle} />
+        <span class="copy">Geben Sie den Kartentitel zur Bestätigung ein</span>
+        <input class="input" type="text" aria-label="Kartentitel bestätigen" bind:value={typedTitle} />
       </label>
       <div class="actions">
         <button
@@ -105,9 +104,9 @@
           disabled={pending || !titleMatches}
           onclick={confirm}
         >
-          {pending ? 'Deleting…' : 'Delete card'}
+          {pending ? 'Wird gelöscht…' : 'Karte löschen'}
         </button>
-        <button class="btn" type="button" onclick={cancel}>Cancel</button>
+        <button class="btn" type="button" onclick={cancel}>Abbrechen</button>
       </div>
     </div>
   {/if}

@@ -83,14 +83,14 @@
           <span class="chip" style="background:#{label.color}">{label.title}</span>
         </li>
       {:else}
-        <li class="muted">No labels</li>
+        <li class="muted">Keine Labels</li>
       {/each}
     </ul>
     <button class="btn" type="button" aria-expanded={labelsOpen} onclick={() => (labelsOpen = !labelsOpen)}>
-      Edit labels
+      Labels bearbeiten
     </button>
     {#if labelsOpen}
-      <input class="input search" type="search" aria-label="Search labels" bind:value={labelQuery} />
+      <input class="input search" type="search" aria-label="Labels suchen" bind:value={labelQuery} />
       <ul class="picker">
         {#each shownLabels as label (label.id)}
           <li>
@@ -108,14 +108,14 @@
             </button>
           </li>
         {:else}
-          <li class="muted">No matching labels</li>
+          <li class="muted">Keine passenden Labels</li>
         {/each}
       </ul>
     {/if}
   </div>
 
   <div class="group">
-    <h3 class="legend" id="members-legend">Members</h3>
+    <h3 class="legend" id="members-legend">Mitglieder</h3>
     <ul class="chips" aria-labelledby="members-legend">
       {#each assigned as entry (personOf(entry).id)}
         {@const person = personOf(entry)}
@@ -123,14 +123,14 @@
           <span class="avatar" title={person.displayName}>{initials(person.displayName)}</span>
         </li>
       {:else}
-        <li class="muted">No members</li>
+        <li class="muted">Keine Mitglieder</li>
       {/each}
     </ul>
     <button class="btn" type="button" aria-expanded={peopleOpen} onclick={() => (peopleOpen = !peopleOpen)}>
-      Edit members
+      Mitglieder bearbeiten
     </button>
     {#if peopleOpen}
-      <input class="input search" type="search" aria-label="Search members" bind:value={peopleQuery} />
+      <input class="input search" type="search" aria-label="Mitglieder suchen" bind:value={peopleQuery} />
       <ul class="picker">
         {#each shownParticipants as person (person.id)}
           <li>
@@ -148,7 +148,7 @@
             </button>
           </li>
         {:else}
-          <li class="muted">No matching members</li>
+          <li class="muted">Keine passenden Mitglieder</li>
         {/each}
       </ul>
     {/if}

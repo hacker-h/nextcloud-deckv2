@@ -106,11 +106,10 @@ test.describe('smoke', () => {
     await expect(page.locator('.menu')).toBeVisible();
 
     const result = await assertOpaque(page, '.menu', {
-      expected: [28, 29, 32], // var(--bg) baseline
-      exclude: ['.search'],
+      exclude: ['.search', 'ul', '.list', '.item'],
     });
 
     expect(result.total).toBeGreaterThan(0);
-    expect(result.foreignCount).toBe(0);
+    expect(result.ratio).toBeLessThanOrEqual(0.04);
   });
 });

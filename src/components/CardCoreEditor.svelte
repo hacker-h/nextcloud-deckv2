@@ -103,7 +103,7 @@
         autofocus
       />
       {#if titleInvalid}
-        <p class="hint" role="alert">Title cannot be empty</p>
+        <p class="hint" role="alert">Titel darf nicht leer sein</p>
       {/if}
     {:else}
       <button class="title" type="button" onclick={startTitle}>{card?.title ?? ''}</button>
@@ -111,37 +111,37 @@
   </div>
 
   <div class="field">
-    <h3 class="legend">Description</h3>
+    <h3 class="legend">Beschreibung</h3>
     {#if editingDesc}
-      <textarea class="desc-input" aria-label="Card description" rows="5" bind:value={descDraft}></textarea>
+      <textarea class="desc-input" aria-label="Beschreibung der Karte" rows="5" bind:value={descDraft}></textarea>
       <div class="actions">
-        <button class="btn primary" type="button" onclick={saveDesc}>Save</button>
-        <button class="btn" type="button" onclick={cancelDesc}>Cancel</button>
+        <button class="btn primary" type="button" onclick={saveDesc}>Speichern</button>
+        <button class="btn" type="button" onclick={cancelDesc}>Abbrechen</button>
       </div>
     {:else if description}
       <p class="desc" data-testid="description">{description}</p>
-      <button class="btn" type="button" onclick={startDesc}>Edit description</button>
+      <button class="btn" type="button" onclick={startDesc}>Beschreibung bearbeiten</button>
     {:else}
-      <button class="btn empty" type="button" onclick={startDesc}>Add a more detailed description</button>
+      <button class="btn empty" type="button" onclick={startDesc}>Fügen Sie eine detailliertere Beschreibung hinzu</button>
     {/if}
   </div>
 
   <div class="field">
-    <h3 class="legend">Due date</h3>
+    <h3 class="legend">Ablaufdatum</h3>
     <div class="actions">
       <input
         class="due-input"
         class:overdue
         type="datetime-local"
-        aria-label="Due date"
+        aria-label="Ablaufdatum"
         value={due}
         onchange={onDueChange}
       />
       {#if due}
-        <button class="btn" type="button" onclick={clearDue}>Clear</button>
+        <button class="btn" type="button" onclick={clearDue}>Entfernen</button>
       {/if}
     </div>
-    {#if overdue}<p class="hint overdue-text">Overdue</p>{/if}
+    {#if overdue}<p class="hint overdue-text">Überfällig</p>{/if}
   </div>
 
   {#if error}

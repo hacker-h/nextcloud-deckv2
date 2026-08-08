@@ -114,7 +114,7 @@
   >
     <header class="head">
       <h2 class="title" id={titleId}>{card?.title ?? 'Card'}</h2>
-      <button class="icon" type="button" onclick={requestClose} aria-label="Close card detail">
+      <button class="icon" type="button" onclick={requestClose} aria-label="Kartendetails schließen">
         <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
           <path d="M4 4l8 8M12 4l-8 8" />
         </svg>
@@ -130,7 +130,7 @@
     {:else if error}
       <div class="body error" role="alert">
         <p class="message">{error}</p>
-        <button class="btn primary" type="button" onclick={() => onRetry?.()}>Retry</button>
+        <button class="btn primary" type="button" onclick={() => onRetry?.()}>Erneut versuchen</button>
       </div>
     {:else}
       <div class="body columns">
@@ -140,12 +140,12 @@
     {/if}
 
     {#if confirming}
-      <div class="confirm" role="alertdialog" aria-label="Unsaved changes">
-        <p class="message">You have unsaved changes.</p>
+      <div class="confirm" role="alertdialog" aria-label="Ungespeicherte Änderungen">
+        <p class="message">Sie haben ungespeicherte Änderungen.</p>
         <div class="actions">
-          <button class="btn primary" type="button" onclick={saveAndClose}>Save</button>
-          <button class="btn danger" type="button" onclick={discardAndClose}>Discard</button>
-          <button class="btn" type="button" onclick={() => (confirming = false)}>Continue editing</button>
+          <button class="btn primary" type="button" onclick={saveAndClose}>Speichern</button>
+          <button class="btn danger" type="button" onclick={discardAndClose}>Verwerfen</button>
+          <button class="btn" type="button" onclick={() => (confirming = false)}>Weiter bearbeiten</button>
         </div>
       </div>
     {/if}

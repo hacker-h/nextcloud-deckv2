@@ -32,14 +32,14 @@ const file = (name = 'detail-test.txt') => new File(['hello'], name, { type: 'te
 describe('CardAttachments', () => {
   it('shows an empty state', () => {
     setup();
-    expect(screen.getByText('No attachments')).toBeInTheDocument();
+    expect(screen.getByText('Keine Anhänge')).toBeInTheDocument();
   });
 
   it('uploads a file chosen through the picker', async () => {
     const { onUpload } = setup();
     const f = file();
 
-    await fireEvent.change(screen.getByLabelText('Attach a file'), { target: { files: [f] } });
+    await fireEvent.change(screen.getByLabelText('Datei anhängen'), { target: { files: [f] } });
 
     expect(onUpload).toHaveBeenCalledWith(f);
   });
@@ -69,11 +69,11 @@ describe('CardAttachments', () => {
   it('renames an attachment', async () => {
     const { onRename } = setup({ attachments: [attachment(1)] });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
-    await fireEvent.input(screen.getByLabelText('Attachment name'), {
+    await fireEvent.click(screen.getByRole('button', { name: 'Umbenennen' }));
+    await fireEvent.input(screen.getByLabelText('Name des Anhangs'), {
       target: { value: 'detail-renamed.txt' },
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onRename).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }), 'detail-renamed.txt');
   });
@@ -81,8 +81,8 @@ describe('CardAttachments', () => {
   it('does not call rename when the name is unchanged', async () => {
     const { onRename } = setup({ attachments: [attachment(1)] });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Umbenennen' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onRename).not.toHaveBeenCalled();
   });
@@ -90,7 +90,7 @@ describe('CardAttachments', () => {
   it('deletes an attachment', async () => {
     const { onDelete } = setup({ attachments: [attachment(1)] });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
 
     expect(onDelete).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
   });
@@ -100,8 +100,8 @@ describe('CardAttachments', () => {
       attachments: [attachment(1, { deletedAt: 1767610000 })],
     });
 
-    expect(screen.queryByRole('button', { name: 'Delete' })).toBeNull();
-    await fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    expect(screen.queryByRole('button', { name: 'Löschen' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
 
     expect(onRestore).toHaveBeenCalledWith(expect.objectContaining({ id: 1 }));
   });
@@ -110,13 +110,13 @@ describe('CardAttachments', () => {
     const onRename = vi.fn().mockRejectedValue(new Error('rename rejected by server'));
     setup({ attachments: [attachment(1)], onRename });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Rename' }));
-    await fireEvent.input(screen.getByLabelText('Attachment name'), {
+    await fireEvent.click(screen.getByRole('button', { name: 'Umbenennen' }));
+    await fireEvent.input(screen.getByLabelText('Name des Anhangs'), {
       target: { value: 'detail-renamed.txt' },
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
-    expect(screen.getByLabelText('Attachment name')).toHaveValue('detail-renamed.txt');
+    expect(screen.getByLabelText('Name des Anhangs')).toHaveValue('detail-renamed.txt');
     expect(screen.getByRole('alert')).toHaveTextContent('rename rejected by server');
   });
 
@@ -124,7 +124,7 @@ describe('CardAttachments', () => {
     const onDelete = vi.fn().mockRejectedValue(new Error('delete rejected by server'));
     setup({ attachments: [attachment(1)], onDelete });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Löschen' }));
 
     expect(screen.getByText('detail-test.txt')).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('delete rejected by server');
@@ -134,16 +134,16 @@ describe('CardAttachments', () => {
     const onRestore = vi.fn().mockRejectedValue(new Error('restore rejected by server'));
     setup({ attachments: [attachment(1, { deletedAt: 1767610000 })], onRestore });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Restore' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Wiederherstellen' }));
 
-    expect(screen.getByRole('button', { name: 'Restore' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Wiederherstellen' })).toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('restore rejected by server');
   });
 
   it('downloads through the authenticated handler rather than a raw link', async () => {
     const { onDownload } = setup({ attachments: [attachment(1)] });
 
-    const button = screen.getByRole('button', { name: 'Download' });
+    const button = screen.getByRole('button', { name: 'Herunterladen' });
     expect(button.tagName).toBe('BUTTON');
     await fireEvent.click(button);
 
@@ -158,10 +158,10 @@ describe('CardAttachments', () => {
     setup({ onUpload });
     const f = file();
 
-    await fireEvent.change(screen.getByLabelText('Attach a file'), { target: { files: [f] } });
+    await fireEvent.change(screen.getByLabelText('Datei anhängen'), { target: { files: [f] } });
     expect(screen.getByRole('alert')).toHaveTextContent('Request failed with status 413');
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
 
     expect(onUpload).toHaveBeenCalledTimes(2);
     expect(onUpload).toHaveBeenNthCalledWith(2, f);
@@ -173,12 +173,12 @@ describe('CardAttachments', () => {
     const onUpload = vi.fn(() => new Promise((r) => (release = r)));
     setup({ onUpload });
 
-    const picker = screen.getByLabelText('Attach a file');
+    const picker = screen.getByLabelText('Datei anhängen');
     await fireEvent.change(picker, { target: { files: [file('a.txt')] } });
     await fireEvent.change(picker, { target: { files: [file('b.txt')] } });
 
     expect(onUpload).toHaveBeenCalledTimes(1);
-    expect(screen.getByRole('status')).toHaveTextContent('Uploading…');
+    expect(screen.getByRole('status')).toHaveTextContent('Wird hochgeladen…');
     release?.();
   });
 

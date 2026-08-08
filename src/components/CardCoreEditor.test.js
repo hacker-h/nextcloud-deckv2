@@ -60,7 +60,7 @@ describe('CardCoreEditor', () => {
     await fireEvent.keyDown(input, { key: 'Enter' });
 
     expect(onSave).not.toHaveBeenCalled();
-    expect(screen.getByRole('alert')).toHaveTextContent('Title cannot be empty');
+    expect(screen.getByRole('alert')).toHaveTextContent('Titel darf nicht leer sein');
   });
 
   it('keeps the recoverable input when a save fails', async () => {
@@ -83,12 +83,12 @@ describe('CardCoreEditor', () => {
   it('saves a multiline description only on explicit Save', async () => {
     const { onSave } = setup();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Add a more detailed description' }));
-    const area = screen.getByLabelText('Card description');
+    await fireEvent.click(screen.getByRole('button', { name: 'Fügen Sie eine detailliertere Beschreibung hinzu' }));
+    const area = screen.getByLabelText('Beschreibung der Karte');
     await fireEvent.input(area, { target: { value: 'Line 1\nLine 2' } });
     expect(onSave).not.toHaveBeenCalled();
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
     expect(onSave).toHaveBeenCalledTimes(1);
     expect(onSave).toHaveBeenCalledWith({ description: 'Line 1\nLine 2' });
   });
@@ -97,14 +97,14 @@ describe('CardCoreEditor', () => {
     const onDraftChange = vi.fn();
     setup({ onDraftChange });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Add a more detailed description' }));
-    await fireEvent.input(screen.getByLabelText('Card description'), {
+    await fireEvent.click(screen.getByRole('button', { name: 'Fügen Sie eine detailliertere Beschreibung hinzu' }));
+    await fireEvent.input(screen.getByLabelText('Beschreibung der Karte'), {
       target: { value: 'unsaved work' },
     });
 
     expect(onDraftChange).toHaveBeenLastCalledWith({ description: 'unsaved work' });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
 
     expect(onDraftChange).toHaveBeenLastCalledWith(null);
   });
@@ -113,11 +113,11 @@ describe('CardCoreEditor', () => {
     const onDraftChange = vi.fn();
     setup({ onDraftChange });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Add a more detailed description' }));
-    await fireEvent.input(screen.getByLabelText('Card description'), {
+    await fireEvent.click(screen.getByRole('button', { name: 'Fügen Sie eine detailliertere Beschreibung hinzu' }));
+    await fireEvent.input(screen.getByLabelText('Beschreibung der Karte'), {
       target: { value: 'abandoned' },
     });
-    await fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Abbrechen' }));
 
     expect(onDraftChange).toHaveBeenLastCalledWith(null);
   });
@@ -134,7 +134,7 @@ describe('CardCoreEditor', () => {
   it('converts a local due date to ISO-8601 without timezone drift', async () => {
     const { onSave } = setup();
 
-    await fireEvent.change(screen.getByLabelText('Due date'), { target: { value: '2030-04-05T14:30' } });
+    await fireEvent.change(screen.getByLabelText('Ablaufdatum'), { target: { value: '2030-04-05T14:30' } });
 
     const [[payload]] = onSave.mock.calls;
     // Round-tripping through Date proves the wall-clock time survives the
@@ -151,20 +151,20 @@ describe('CardCoreEditor', () => {
     const iso = new Date(2030, 3, 5, 14, 30).toISOString();
     setup({ card: { ...base, duedate: iso } });
 
-    expect(screen.getByLabelText('Due date')).toHaveValue('2030-04-05T14:30');
+    expect(screen.getByLabelText('Ablaufdatum')).toHaveValue('2030-04-05T14:30');
   });
 
   it('clears a due date', async () => {
     const iso = new Date(2030, 3, 5, 14, 30).toISOString();
     const { onSave } = setup({ card: { ...base, duedate: iso } });
 
-    await fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+    await fireEvent.click(screen.getByRole('button', { name: 'Entfernen' }));
     expect(onSave).toHaveBeenCalledWith({ duedate: null });
   });
 
   it('marks a past due date as overdue', () => {
     setup({ card: { ...base, duedate: new Date(2020, 0, 1, 9, 0).toISOString() } });
 
-    expect(screen.getByText('Overdue')).toBeInTheDocument();
+    expect(screen.getByText('Überfällig')).toBeInTheDocument();
   });
 });

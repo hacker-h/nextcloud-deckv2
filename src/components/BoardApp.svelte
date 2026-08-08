@@ -235,20 +235,20 @@
         <span class="current-access"><AccessBadge level={accessLevel(current)} /></span>
       {/if}
       {#if !loading && !error}
-        <span class="stat">{stacks.length} lists · {cardCount} cards</span>
+        <span class="stat">{stacks.length} Listen · {cardCount} Karten</span>
       {/if}
       {#if board.state.pending > 0}
-        <span class="pending" title="Saving to Deck">
-          {board.state.pending} saving…
+        <span class="pending" title="Wird in Deck gespeichert">
+          {board.state.pending} wird gespeichert…
         </span>
       {/if}
       <span class="build" title={__BUILD_TIME__}>{__BUILD_SHA__}</span>
       <!-- Plain text beats an avatar menu here: the topbar is dense, and one action
         does not justify hiding the signed-in username behind another interaction. -->
-      <div class="account" title={`Signed in as ${currentUser}`} aria-label={`Signed in as ${currentUser}`}>
+      <div class="account" title={`Angemeldet als ${currentUser}`} aria-label={`Angemeldet als ${currentUser}`}>
         <span class="account-user">{currentUser}</span>
         <span class="account-sep" aria-hidden="true">•</span>
-        <button class="signout" type="button" onclick={() => onSignOut()}>Sign out</button>
+        <button class="signout" type="button" onclick={() => onSignOut()}>Abmelden</button>
       </div>
     </header>
 
@@ -256,7 +256,7 @@
       <div class="state">
         <p class="err">{error}</p>
         <button class="retry" onclick={() => (current ? openBoard(current) : init())}>
-          Retry
+          Erneut versuchen
         </button>
       </div>
     {:else if loading}
@@ -287,21 +287,21 @@
 
     {#if selectedCount > 0}
       <div class="selbar" role="region" aria-label="Selection actions">
-        <span class="selcount">{selectedCount} selected</span>
+        <span class="selcount">{selectedCount} ausgewählt</span>
         <label class="selmove">
-          Move to
+          Verschieben nach
           <select
-            aria-label="Move selection to list"
+            aria-label="Selection to list"
             value=""
             onchange={(e) => { moveSelectionTo(Number(e.currentTarget.value)); e.currentTarget.value = ''; }}
           >
-            <option value="" disabled>Choose a list…</option>
+            <option value="" disabled>Liste auswählen…</option>
             {#each stacks as s (s.id)}
               <option value={s.id}>{s.title}</option>
             {/each}
           </select>
         </label>
-        <button class="selclear" type="button" onclick={clearSelection}>Clear</button>
+        <button class="selclear" type="button" onclick={clearSelection}>Auswahl aufheben</button>
       </div>
     {/if}
 

@@ -13,7 +13,7 @@ describe('LoginScreen', () => {
 
     expect(screen.getByText('cloud.example.test')).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Sign in with Nextcloud' }));
+    await user.click(screen.getByRole('button', { name: 'Mit Nextcloud anmelden' }));
 
     expect(onSignIn).toHaveBeenCalledTimes(1);
   });
@@ -25,9 +25,9 @@ describe('LoginScreen', () => {
       props: { instanceName: 'cloud.example.test', status: 'pending', onCancel },
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent(/waiting for you to approve/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/Warte auf Ihre Bestätigung/i);
 
-    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    await user.click(screen.getByRole('button', { name: 'Abbrechen' }));
 
     expect(onCancel).toHaveBeenCalledTimes(1);
   });
@@ -41,7 +41,7 @@ describe('LoginScreen', () => {
       },
     });
 
-    const link = screen.getByRole('link', { name: 'Open the sign-in page again' });
+    const link = screen.getByRole('link', { name: 'Anmeldeseite erneut öffnen' });
     expect(link).toHaveAttribute('href', 'https://cloud.example.test/login/v2/flow');
     expect(link).toHaveAttribute('target', '_blank');
     expect(link.getAttribute('rel')).toContain('noopener');
@@ -54,9 +54,9 @@ describe('LoginScreen', () => {
       props: { instanceName: 'cloud.example.test', status: 'anonymous', expired: true, onSignIn },
     });
 
-    expect(screen.getByRole('status')).toHaveTextContent(/20 minutes/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/20 Minuten/i);
 
-    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    await user.click(screen.getByRole('button', { name: 'Erneut versuchen' }));
 
     expect(onSignIn).toHaveBeenCalledTimes(1);
   });
@@ -74,6 +74,6 @@ describe('LoginScreen', () => {
       props: { instanceName: 'cloud.example.test', status: 'anonymous' },
     });
 
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Sign in with Nextcloud' }));
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Mit Nextcloud anmelden' }));
   });
 });

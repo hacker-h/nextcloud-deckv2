@@ -14,15 +14,15 @@
       <rect x="1.9" y="2.6" width="12.2" height="10.8" rx="2"/>
       <path d="M1.9 9.4h3.2l.9 1.6h4l.9-1.6h3.2"/>
     </svg>
-    Inbox
+    Posteingang
   </button>
 
-  <button class="tab" type="button" disabled title="Planner arrives with calendar sync">
+  <button class="tab" type="button" disabled title="Planer erscheint mit Kalender-Synchronisation">
     <svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
       <rect x="2.2" y="3.2" width="11.6" height="10.6" rx="2"/>
       <path d="M2.2 6.6h11.6M5.4 1.9v2.6M10.6 1.9v2.6"/>
     </svg>
-    Planner
+    Planer
   </button>
 
   <button class="tab active" type="button" aria-pressed="true">
@@ -46,7 +46,7 @@
       <rect x="1.6" y="4.2" width="8.6" height="8" rx="1.8"/>
       <path d="M5.4 4.2V3a1.4 1.4 0 0 1 1.4-1.4h6.2A1.4 1.4 0 0 1 14.4 3v6.2a1.4 1.4 0 0 1-1.4 1.4h-1.2"/>
     </svg>
-    Switch boards
+    Boards wechseln
   </button>
 </nav>
 

@@ -31,15 +31,15 @@
       </svg>
     </span>
     {#if !collapsed}
-      <h2 class="title">Inbox</h2>
+      <h2 class="title">Posteingang</h2>
       <span class="count">{state.cards.length}</span>
     {/if}
     <button
       class="toggle"
       type="button"
       aria-expanded={!collapsed}
-      aria-label={collapsed ? 'Expand inbox' : 'Collapse inbox'}
-      title={collapsed ? 'Expand inbox' : 'Collapse inbox'}
+      aria-label={collapsed ? 'Posteingang erweitern' : 'Posteingang einklappen'}
+      title={collapsed ? 'Posteingang erweitern' : 'Posteingang einklappen'}
       onclick={() => onToggle?.()}
     >
       <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -83,8 +83,8 @@
                 <path d="M6 27h9l2.6 4.4h12.8L33 27h9"/>
               </svg>
             </span>
-            <p class="empty-title">Collect everything here</p>
-            <p class="empty-body">Drag cards in from any board to keep what is not scheduled yet in one place.</p>
+            <p class="empty-title">Aufgaben konsolidieren</p>
+            <p class="empty-body">Ob als E-Mail, mündlich mitgeteilt oder weitergeleitet – erfassen Sie alles schnell in Trello.</p>
           </div>
         {/if}
       </div>
@@ -94,7 +94,7 @@
           <rect x="3.4" y="7" width="9.2" height="6.6" rx="1.6"/>
           <path d="M5.6 7V5.2a2.4 2.4 0 0 1 4.8 0V7"/>
         </svg>
-        Only you can see your inbox
+        Der Posteingang ist nur für Sie sichtbar
       </footer>
     {/if}
   {/if}

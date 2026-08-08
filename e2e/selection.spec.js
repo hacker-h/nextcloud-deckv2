@@ -75,15 +75,18 @@ test.describe('multi-select', () => {
     await expect(selected(page)).toHaveCount(0);
   });
 
-  test('a plain click opens the detail and leaves the selection alone', async ({ page }) => {
+  test('a plain click when selection is active toggles card selection and does not open detail', async ({ page }) => {
     await openTestBoard(page);
     const ids = await cardIdsIn(page, TEST_STACKS.doing);
 
     await card(page, ids[0]).click({ modifiers: ['Shift'] });
+    await expect(card(page, ids[0])).toHaveAttribute('aria-pressed', 'true');
+
     await card(page, ids[1]).click();
 
-    await expect(page.locator('[role="dialog"]')).toHaveCount(1);
+    await expect(page.locator('[role="dialog"]')).toHaveCount(0);
     await expect(card(page, ids[0])).toHaveAttribute('aria-pressed', 'true');
+    await expect(card(page, ids[1])).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('the selection counter reports the number of selected cards', async ({ page }) => {

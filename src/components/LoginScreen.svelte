@@ -33,38 +33,38 @@
 <main class="login-shell" aria-labelledby="login-title">
   <section class="login-card">
     <p class="eyebrow">Nextcloud Deck</p>
-    <h1 id="login-title">Sign in to your boards</h1>
-    <p class="instance">This app will connect to <strong>{displayInstance}</strong>.</p>
+    <h1 id="login-title">Bei Ihren Boards anmelden</h1>
+    <p class="instance">Diese App verbindet sich mit <strong>{displayInstance}</strong>.</p>
 
     <div class="status" role="status" aria-live="polite">
       {#if expired}
-        <p class="status-title danger">Sign-in request expired</p>
-        <p class="copy">Nextcloud sign-in requests live for 20 minutes. Start a fresh request to continue.</p>
+        <p class="status-title danger">Anmeldeanfrage abgelaufen</p>
+        <p class="copy">Nextcloud-Anmeldeanfragen sind 20 Minuten gültig. Starten Sie eine neue Anfrage, um fortzufahren.</p>
       {:else if waiting}
-        <p class="status-title">Waiting for approval…</p>
-        <p class="copy">Waiting for you to approve the sign-in in Nextcloud…</p>
+        <p class="status-title">Warte auf Bestätigung…</p>
+        <p class="copy">Warte auf Ihre Bestätigung in Nextcloud…</p>
       {:else if hasError}
-        <p class="status-title danger">Sign-in failed</p>
+        <p class="status-title danger">Anmeldung fehlgeschlagen</p>
         <p class="copy err">{error}</p>
       {:else}
         <p class="copy">
-          A Nextcloud page will open in a new tab where you approve access. Nextcloud creates a per-device app password for this browser, and you can revoke it anytime in Nextcloud → Settings → Security.
+          Eine Nextcloud-Seite wird in einem neuen Tab geöffnet, auf der Sie den Zugriff bestätigen. Nextcloud erstellt ein gerätespezifisches App-Passwort für diesen Browser.
         </p>
       {/if}
     </div>
 
     <div class="actions">
       {#if expired}
-        <button class="primary" type="button" onclick={() => onSignIn?.()} bind:this={primaryAction}>Try again</button>
+        <button class="primary" type="button" onclick={() => onSignIn?.()} bind:this={primaryAction}>Erneut versuchen</button>
       {:else if waiting}
-        <button class="secondary" type="button" onclick={() => onCancel?.()} bind:this={primaryAction}>Cancel</button>
+        <button class="secondary" type="button" onclick={() => onCancel?.()} bind:this={primaryAction}>Abbrechen</button>
         {#if loginUrl}
-          <a class="again" href={loginUrl} target="_blank" rel="noopener noreferrer">Open the sign-in page again</a>
+          <a class="again" href={loginUrl} target="_blank" rel="noopener noreferrer">Anmeldeseite erneut öffnen</a>
         {/if}
       {:else if hasError}
-        <button class="primary" type="button" onclick={() => onSignIn?.()} bind:this={primaryAction}>Try again</button>
+        <button class="primary" type="button" onclick={() => onSignIn?.()} bind:this={primaryAction}>Erneut versuchen</button>
       {:else}
-        <button class="primary" type="button" onclick={() => onSignIn?.()} bind:this={primaryAction}>Sign in with Nextcloud</button>
+        <button class="primary" type="button" onclick={() => onSignIn?.()} bind:this={primaryAction}>Mit Nextcloud anmelden</button>
       {/if}
     </div>
   </section>

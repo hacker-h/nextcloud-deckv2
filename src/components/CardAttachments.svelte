@@ -104,7 +104,7 @@
 </script>
 
 <section class="attachments">
-  <h3 class="legend">Attachments</h3>
+  <h3 class="legend">Anhänge</h3>
 
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <div
@@ -116,28 +116,28 @@
     ondragleave={onDragLeave}
     ondrop={onDrop}
   >
-    <p class="hint">Drop a file here</p>
+    <p class="hint">Datei hier ablegen</p>
     <input
       class="file"
       type="file"
-      aria-label="Attach a file"
+      aria-label="Datei anhängen"
       bind:this={input}
       onchange={onPick}
       disabled={pending}
     />
   </div>
 
-  {#if pending}<p class="hint" role="status">Uploading…</p>{/if}
+  {#if pending}<p class="hint" role="status">Wird hochgeladen…</p>{/if}
 
   {#if error}
     <p class="error" role="alert">
       {error}
-      {#if failedFile}<button class="btn link" type="button" onclick={retry}>Retry</button>{/if}
+      {#if failedFile}<button class="btn link" type="button" onclick={retry}>Erneut versuchen</button>{/if}
     </p>
   {/if}
 
   {#if live.length === 0}
-    <p class="hint">No attachments</p>
+    <p class="hint">Keine Anhänge</p>
   {:else}
     <ul class="list">
       {#each live as attachment (attachment.id)}
@@ -146,21 +146,21 @@
             <input
               class="rename"
               type="text"
-              aria-label="Attachment name"
+              aria-label="Name des Anhangs"
               bind:value={renameDraft}
               onkeydown={(e) => e.key === 'Enter' && submitRename(attachment)}
             />
             <button class="btn primary" type="button" disabled={pending} onclick={() => submitRename(attachment)}>
-              Save
+              Speichern
             </button>
-            <button class="btn" type="button" onclick={() => (renamingId = null)}>Cancel</button>
+            <button class="btn" type="button" onclick={() => (renamingId = null)}>Abbrechen</button>
           {:else}
             <span class="name">{attachment.name}</span>
             <span class="meta">{formatSize(attachment.size)}</span>
-            <button class="btn link" type="button" onclick={() => onDownload?.(attachment)}>Download</button>
-            <button class="btn link" type="button" onclick={() => startRename(attachment)}>Rename</button>
+            <button class="btn link" type="button" onclick={() => onDownload?.(attachment)}>Herunterladen</button>
+            <button class="btn link" type="button" onclick={() => startRename(attachment)}>Umbenennen</button>
             <button class="btn link" type="button" disabled={pending} onclick={() => run(() => onDelete?.(attachment))}>
-              Delete
+              Löschen
             </button>
           {/if}
         </li>
@@ -174,7 +174,7 @@
         <li class="item">
           <span class="name struck">{attachment.name}</span>
           <button class="btn link" type="button" disabled={pending} onclick={() => run(() => onRestore?.(attachment))}>
-            Restore
+            Wiederherstellen
           </button>
         </li>
       {/each}

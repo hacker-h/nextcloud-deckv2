@@ -33,8 +33,8 @@ describe('App auth gate', () => {
     render(App, { props: { auth } });
 
     expect(screen.getByLabelText('Checking sign-in status')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sign in with Nextcloud' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mit Nextcloud anmelden' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Abmelden' })).not.toBeInTheDocument();
     expect(auth.check).toHaveBeenCalledTimes(1);
   });
 
@@ -43,8 +43,8 @@ describe('App auth gate', () => {
 
     render(App, { props: { auth } });
 
-    expect(screen.getByRole('button', { name: 'Sign in with Nextcloud' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sign out' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mit Nextcloud anmelden' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Abmelden' })).not.toBeInTheDocument();
   });
 
   it('shows LoginScreen waiting state while pending', () => {
@@ -52,7 +52,7 @@ describe('App auth gate', () => {
 
     render(App, { props: { auth } });
 
-    expect(screen.getByRole('status')).toHaveTextContent(/waiting for you to approve/i);
+    expect(screen.getByRole('status')).toHaveTextContent(/Warte auf Ihre Bestätigung/i);
   });
 
   it('shows BoardApp with the authenticated user', () => {
@@ -62,8 +62,8 @@ describe('App auth gate', () => {
     render(App, { props: { auth } });
 
     expect(screen.getByText('alice')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Sign out' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Sign in with Nextcloud' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Abmelden' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Mit Nextcloud anmelden' })).not.toBeInTheDocument();
   });
 
   it('starts sign-in and opens the returned URL', async () => {
@@ -72,7 +72,7 @@ describe('App auth gate', () => {
     const user = userEvent.setup();
 
     render(App, { props: { auth } });
-    await user.click(screen.getByRole('button', { name: 'Sign in with Nextcloud' }));
+    await user.click(screen.getByRole('button', { name: 'Mit Nextcloud anmelden' }));
 
     expect(auth.signIn).toHaveBeenCalledTimes(1);
     expect(open).toHaveBeenCalledWith('https://cloud.example.test/login', '_blank', 'noopener,noreferrer');

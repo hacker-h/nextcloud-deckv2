@@ -26,15 +26,15 @@ function setup(props = {}) {
   return handlers;
 }
 
-const openLabels = () => fireEvent.click(screen.getByRole('button', { name: 'Edit labels' }));
-const openMembers = () => fireEvent.click(screen.getByRole('button', { name: 'Edit members' }));
+const openLabels = () => fireEvent.click(screen.getByRole('button', { name: 'Labels bearbeiten' }));
+const openMembers = () => fireEvent.click(screen.getByRole('button', { name: 'Mitglieder bearbeiten' }));
 
 describe('CardMetadataEditor', () => {
   it('filters labels by the search query', async () => {
     setup();
     await openLabels();
 
-    await fireEvent.input(screen.getByLabelText('Search labels'), { target: { value: 'fea' } });
+    await fireEvent.input(screen.getByLabelText('Labels suchen'), { target: { value: 'fea' } });
 
     expect(screen.getByRole('checkbox', { name: /Feature/ })).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /Bug/ })).toBeNull();
@@ -44,19 +44,19 @@ describe('CardMetadataEditor', () => {
     setup();
     await openMembers();
 
-    await fireEvent.input(screen.getByLabelText('Search members'), { target: { value: 'bo' } });
+    await fireEvent.input(screen.getByLabelText('Mitglieder suchen'), { target: { value: 'bo' } });
     expect(screen.getByRole('checkbox', { name: /Bob/ })).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /Alice/ })).toBeNull();
 
-    await fireEvent.input(screen.getByLabelText('Search members'), { target: { value: 'zzz' } });
-    expect(screen.getByText('No matching members')).toBeInTheDocument();
+    await fireEvent.input(screen.getByLabelText('Mitglieder suchen'), { target: { value: 'zzz' } });
+    expect(screen.getByText('Keine passenden Mitglieder')).toBeInTheDocument();
   });
 
   it('keeps searched options reachable and activatable by keyboard alone', async () => {
     const { onAssignLabel } = setup();
     await openLabels();
 
-    await fireEvent.input(screen.getByLabelText('Search labels'), { target: { value: 'fea' } });
+    await fireEvent.input(screen.getByLabelText('Labels suchen'), { target: { value: 'fea' } });
     const option = screen.getByRole('checkbox', { name: /Feature/ });
 
     // Native buttons are what make Enter/Space activation work without any
@@ -153,8 +153,8 @@ describe('CardMetadataEditor', () => {
   it('shows empty states when nothing is assigned', () => {
     setup();
 
-    expect(screen.getByText('No labels')).toBeInTheDocument();
-    expect(screen.getByText('No members')).toBeInTheDocument();
+    expect(screen.getByText('Keine Labels')).toBeInTheDocument();
+    expect(screen.getByText('Keine Mitglieder')).toBeInTheDocument();
   });
 
   it('surfaces an assignment error', () => {

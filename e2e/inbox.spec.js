@@ -31,6 +31,7 @@ async function dragTo(page, from, to) {
   await page.mouse.move(start.x, start.y);
   await page.mouse.down();
   await page.mouse.move(target.x, target.y, { steps: 14 });
+  await page.waitForTimeout(50);
   await page.mouse.up();
 }
 
@@ -134,10 +135,14 @@ test.describe('cross-board inbox', () => {
         })
         .toBe(inbox.board.id);
 
+      const itemInInbox = inboxPanel(page).locator(`[data-card-id="${moving}"]`);
+      await itemInInbox.scrollIntoViewIfNeeded();
+      const targetStack = page.locator(`[data-stack-id="${TEST_STACKS.done}"]`);
+      await targetStack.scrollIntoViewIfNeeded();
       await dragTo(
         page,
-        inboxPanel(page).locator(`[data-card-id="${moving}"]`),
-        page.locator(`[data-stack-id="${TEST_STACKS.done}"] [data-cards]`)
+        itemInInbox,
+        targetStack.locator('[data-cards]')
       );
 
       await expect

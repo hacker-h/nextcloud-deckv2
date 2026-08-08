@@ -43,7 +43,7 @@ describe('BoardApp account header', () => {
 
     render(BoardApp, { props: { currentUser: 'alice' } });
 
-    expect(screen.getByLabelText('Signed in as alice')).toBeInTheDocument();
+    expect(screen.getByLabelText('Angemeldet als alice')).toBeInTheDocument();
     expect(screen.getByText('alice')).toBeInTheDocument();
   });
 
@@ -64,7 +64,7 @@ describe('BoardApp account header', () => {
     const user = userEvent.setup();
     render(BoardApp, { props: { currentUser: 'alice', onSignOut } });
 
-    await user.click(screen.getByRole('button', { name: 'Sign out' }));
+    await user.click(screen.getByRole('button', { name: 'Abmelden' }));
 
     expect(onSignOut).toHaveBeenCalledTimes(1);
   });

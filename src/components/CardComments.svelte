@@ -110,22 +110,22 @@
         <time>{when(comment.creationDateTime)}</time>
       </p>
       {#if editingId === comment.id}
-        <textarea class="input" aria-label="Edit comment" rows="3" bind:value={editDraft}></textarea>
+        <textarea class="input" aria-label="Kommentar bearbeiten" rows="3" bind:value={editDraft}></textarea>
         <div class="actions">
           <button class="btn primary" type="button" disabled={pending || !editDraft.trim()} onclick={() => submitEdit(comment)}>
-            Save
+            Speichern
           </button>
-          <button class="btn" type="button" onclick={() => (editingId = null)}>Cancel</button>
+          <button class="btn" type="button" onclick={() => (editingId = null)}>Abbrechen</button>
         </div>
       {:else}
         <p class="message">{comment.message}</p>
         <div class="actions">
           <button class="btn link" type="button" onclick={() => (replyTo = replyTo === comment.id ? null : comment.id)}>
-            Reply
+            Antworten
           </button>
           {#if comment.canEdit}
-            <button class="btn link" type="button" onclick={() => startEdit(comment)}>Edit</button>
-            <button class="btn link" type="button" disabled={pending} onclick={() => remove(comment)}>Delete</button>
+            <button class="btn link" type="button" onclick={() => startEdit(comment)}>Bearbeiten</button>
+            <button class="btn link" type="button" disabled={pending} onclick={() => remove(comment)}>Löschen</button>
           {/if}
         </div>
       {/if}
@@ -134,7 +134,7 @@
 {/snippet}
 
 <section class="comments">
-  <h3 class="legend">Comments</h3>
+  <h3 class="legend">Kommentare</h3>
 
   <form
     class="composer"
@@ -143,21 +143,21 @@
       submit();
     }}
   >
-    <textarea class="input" aria-label="Write a comment" rows="3" bind:value={draft}></textarea>
+    <textarea class="input" aria-label="Kommentar schreiben" rows="3" bind:value={draft}></textarea>
     <button class="btn primary" type="submit" disabled={pending || !draft.trim()}>
-      {pending ? 'Saving…' : 'Comment'}
+      {pending ? 'Wird gespeichert…' : 'Kommentieren'}
     </button>
   </form>
 
   {#if error}
     <p class="error" role="alert">
       {error}
-      <button class="btn link" type="button" onclick={retry}>Retry</button>
+      <button class="btn link" type="button" onclick={retry}>Erneut versuchen</button>
     </p>
   {/if}
 
   {#if threads.length === 0}
-    <p class="empty">No comments yet</p>
+    <p class="empty">Noch keine Kommentare</p>
   {:else}
     <ul class="thread">
       {#each threads as { comment, replies } (comment.id)}
