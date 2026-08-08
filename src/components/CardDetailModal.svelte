@@ -130,7 +130,7 @@
     const pastedText = e.clipboardData?.getData('text/plain')?.trim();
     if (pastedText && /^https?:\/\/[^\s]+$/i.test(pastedText) && !isTextInput && onAttachLink) {
       e.preventDefault();
-      toast = { status: 'uploading', message: 'Link anhängen ...' };
+      toast = { status: 'uploading', message: 'Link anhängen' };
       try {
         await onAttachLink(pastedText);
         toast = { status: 'success', message: 'Erfolgreich' };
@@ -176,7 +176,7 @@
 
     const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
     if (uri && /^https?:\/\/[^\s]+$/i.test(uri.trim()) && onAttachLink) {
-      toast = { status: 'uploading', message: 'Link anhängen ...' };
+      toast = { status: 'uploading', message: 'Link anhängen' };
       try {
         await onAttachLink(uri.trim());
         toast = { status: 'success', message: 'Erfolgreich' };
@@ -241,7 +241,7 @@
           <svg viewBox="0 0 16 16" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M2.5 13.5h11"/>
           </svg>
-          <span>{dragType === 'link' ? 'Link anhängen' : 'Dateien für Upload ablegen.'}</span>
+          <span>Dateien für Upload ablegen.</span>
         </div>
       </div>
     {/if}
