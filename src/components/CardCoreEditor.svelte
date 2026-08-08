@@ -1,15 +1,24 @@
 <script>
-  let { card, onSave, onDraftChange = () => {}, error = null } = $props();
+  import { parseChecklists, serializeChecklists } from '../lib/checklist.js';
+  import CardChecklist from './CardChecklist.svelte';
+  import AddChecklistPopover from './AddChecklistPopover.svelte';
+
+  let { card, onSave, onDraftChange = () => {}, error = null, members = [] } = $props();
 
   let editingTitle = $state(false);
   let titleDraft = $state('');
   let editingDesc = $state(false);
   let descDraft = $state('');
+  let showAddChecklist = $state(false);
 
-  const description = $derived(card?.description ?? '');
+  const rawDescription = $derived(card?.description ?? '');
+
+  const parsed = $derived(parseChecklists(rawDescription));
+  const descriptionText = $derived(parsed.descriptionText);
+  const checklists = $derived(parsed.checklists);
 
   $effect(() => {
-    onDraftChange(editingDesc && descDraft !== description ? { description: descDraft } : null);
+    onDraftChange(editingDesc && descDraft !== descriptionText ? { description: descDraft } : null);
   });
   const titleInvalid = $derived(editingTitle && !titleDraft.trim());
 
@@ -58,13 +67,16 @@
   }
 
   function startDesc() {
-    descDraft = description;
+    descDraft = descriptionText;
     editingDesc = true;
   }
 
   async function saveDesc() {
     editingDesc = false;
-    if (descDraft !== description) await onSave?.({ description: descDraft });
+    const newFullDescription = serializeChecklists(descDraft, checklists);
+    if (newFullDescription !== rawDescription) {
+      await onSave?.({ description: newFullDescription });
+    }
   }
 
   function cancelDesc() {
@@ -79,6 +91,46 @@
 
   async function clearDue() {
     await onSave?.({ duedate: null });
+  }
+
+  async function handleAddChecklist({ title, copyFrom }) {
+    showAddChecklist = false;
+
+    let itemsToCopy = [];
+    if (copyFrom && copyFrom !== '(keine)') {
+      const sourceCl = checklists.find((c) => c.title === copyFrom);
+      if (sourceCl) {
+        itemsToCopy = sourceCl.items.map((i) => ({
+          ...i,
+          id: 'item_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+          done: false
+        }));
+      }
+    }
+
+    const newCl = {
+      id: 'cl_' + Date.now(),
+      title: title || 'Checkliste',
+      items: itemsToCopy
+    };
+
+    const updatedChecklists = [...checklists, newCl];
+    const newFullDesc = serializeChecklists(descriptionText, updatedChecklists);
+    await onSave?.({ description: newFullDesc });
+  }
+
+  async function handleUpdateChecklist(updatedCl) {
+    const updatedChecklists = checklists.map((c) =>
+      c.id === updatedCl.id ? updatedCl : c
+    );
+    const newFullDesc = serializeChecklists(descriptionText, updatedChecklists);
+    await onSave?.({ description: newFullDesc });
+  }
+
+  async function handleDeleteChecklist(checklistId) {
+    const updatedChecklists = checklists.filter((c) => c.id !== checklistId);
+    const newFullDesc = serializeChecklists(descriptionText, updatedChecklists);
+    await onSave?.({ description: newFullDesc });
   }
 </script>
 
@@ -131,7 +183,7 @@
       </svg>
       Datum
     </button>
-    <button class="pill-btn" type="button">
+    <button class="pill-btn" type="button" onclick={() => (showAddChecklist = true)}>
       <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
         <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
         <path d="M5.5 8.5l2 2 3.5-4" />
@@ -140,6 +192,7 @@
     </button>
   </div>
 
+  <!-- Description Section -->
   <div class="section-field">
     <div class="section-head">
       <svg viewBox="0 0 16 16" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
@@ -156,9 +209,9 @@
         <div class="flex-spacer"></div>
         <button class="btn help-btn" type="button">Formatierungshilfe</button>
       </div>
-    {:else if description}
+    {:else if descriptionText}
       <div class="desc-box" onclick={startDesc} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && startDesc()}>
-        <p class="desc" data-testid="description">{description}</p>
+        <p class="desc" data-testid="description">{descriptionText}</p>
       </div>
     {:else}
       <button class="desc-placeholder-btn" type="button" aria-label="Fügen Sie eine detailliertere Beschreibung hinzu" onclick={startDesc}>
@@ -166,6 +219,16 @@
       </button>
     {/if}
   </div>
+
+  <!-- Checklists Section -->
+  {#each checklists as cl (cl.id)}
+    <CardChecklist
+      checklist={cl}
+      {members}
+      onUpdateChecklist={handleUpdateChecklist}
+      onDeleteChecklist={handleDeleteChecklist}
+    />
+  {/each}
 
   <div class="section-field">
     <div class="section-head">
@@ -193,6 +256,14 @@
 
   {#if error}
     <p class="hint error" role="alert">{error}</p>
+  {/if}
+
+  {#if showAddChecklist}
+    <AddChecklistPopover
+      existingChecklists={checklists}
+      onAdd={handleAddChecklist}
+      onClose={() => (showAddChecklist = false)}
+    />
   {/if}
 </section>
 
@@ -376,4 +447,3 @@
   .hint { margin: 0; margin-left: 28px; font-size: 12px; color: #9fadbc; }
   .error, .overdue-text { color: #f87171; }
 </style>
-

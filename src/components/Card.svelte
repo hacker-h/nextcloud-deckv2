@@ -1,6 +1,7 @@
 <script>
   import { draggable } from '../lib/dnd.svelte.js';
   import ImageLightbox from './ImageLightbox.svelte';
+  import { getChecklistSummary } from '../lib/checklist.js';
 
   let { card, onDrop, onOpenCard, onSelect, selected = false, selectionMode = false, dragIds, onUploadAttachment, onAttachLink } = $props();
 
@@ -17,8 +18,9 @@
   });
 
   const labels = $derived(card.labels ?? []);
+  const checklistSummary = $derived(getChecklistSummary(card.description));
   const hasDesc = $derived(Boolean(card.description?.trim()));
-  const hasMeta = $derived(due || hasDesc || card.commentsCount > 0 || card.attachmentCount > 0);
+  const hasMeta = $derived(due || hasDesc || card.commentsCount > 0 || card.attachmentCount > 0 || checklistSummary.total > 0);
 
   const imageAttachment = $derived.by(() => {
     if (card.coverUrl) return { url: card.coverUrl, name: card.title };
@@ -193,6 +195,14 @@
             {card.commentsCount}
           </span>
         {/if}
+        {#if checklistSummary.total > 0}
+          <span
+            class="badge checklist-badge {checklistSummary.done === checklistSummary.total ? 'complete' : ''}"
+            title="{checklistSummary.done} von {checklistSummary.total} Checklisten-Elementen erledigt"
+          >
+            ☑ {checklistSummary.done}/{checklistSummary.total}
+          </span>
+        {/if}
         {#if card.attachmentCount > 0}
           <span class="badge" title="{card.attachmentCount} Anhänge">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true">
@@ -321,6 +331,18 @@
   .badge svg { display: block; }
   .due { padding: 2px 4px; border-radius: 4px; }
   .overdue { background: #5D1F1A; color: #FD9891; }
+  .checklist-badge {
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: #2c333a;
+    color: #b6c2cf;
+    font-size: 11px;
+    font-weight: 500;
+  }
+  .checklist-badge.complete {
+    background: #1f845a;
+    color: #ffffff;
+  }
 
   .card-drop-overlay {
     position: absolute;
