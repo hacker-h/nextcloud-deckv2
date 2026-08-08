@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { applyShiftClick, emptySelection, isSelected, orderedSelection } from './selection.js';
+import { applyCardClick, applyShiftClick, emptySelection, isSelected, orderedSelection } from './selection.js';
 
 const STACK_A = 1;
 const STACK_B = 2;
@@ -8,6 +8,28 @@ const A = [10, 11, 12, 13, 14, 15];
 function shift(selection, cardId, stackId = STACK_A, stackCardIds = A) {
   return applyShiftClick(selection, { cardId, stackId, stackCardIds });
 }
+
+describe('plain click selection mode', () => {
+  it('signals openDetail when selection is empty', () => {
+    const res = applyCardClick(emptySelection(), { cardId: 12, stackId: STACK_A, stackCardIds: A });
+    expect(res.openDetail).toBe(true);
+  });
+
+  it('toggles selection and suppresses detail when selection is non-empty', () => {
+    const s1 = shift(emptySelection(), 12);
+    const res = applyCardClick(s1, { cardId: 14, stackId: STACK_A, stackCardIds: A });
+    expect(res.openDetail).toBe(false);
+    expect(res.selection.ids).toEqual([12, 14]);
+
+    const res2 = applyCardClick(res.selection, { cardId: 12, stackId: STACK_A, stackCardIds: A });
+    expect(res2.openDetail).toBe(false);
+    expect(res2.selection.ids).toEqual([14]);
+
+    const res3 = applyCardClick(res2.selection, { cardId: 14, stackId: STACK_A, stackCardIds: A });
+    expect(res3.openDetail).toBe(false);
+    expect(res3.selection.ids).toEqual([]);
+  });
+});
 
 describe('shift+click selection (PLAN.md §6, measured from Trello)', () => {
   it('selects a single card and makes it the anchor when nothing is selected', () => {

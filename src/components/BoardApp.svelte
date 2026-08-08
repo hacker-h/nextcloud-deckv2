@@ -6,7 +6,7 @@
   import { downloadAttachment } from '../lib/attachments.js';
   import { touch, sortByMru } from '../lib/mru.js';
   import { accessLevel } from '../lib/permissions.js';
-  import { applyShiftClick, emptySelection, orderedSelection } from '../lib/selection.js';
+  import { applyCardClick, applyShiftClick, emptySelection, orderedSelection } from '../lib/selection.js';
   import { createInboxStore } from '../lib/inbox.svelte.js';
   import { withoutInbox, readCollapsed, writeCollapsed } from '../lib/inbox.js';
   import Board from './Board.svelte';
@@ -144,11 +144,31 @@
   }
 
   function handleOpenCard({ card }) {
-    detail.open({ boardId: current.id, stackId: card.stackId, cardId: card.id });
+    const stack = allStacks.find((s) => s.id === card.stackId);
+    const result = applyCardClick(selection, {
+      cardId: card.id,
+      stackId: card.stackId,
+      stackCardIds: (stack?.cards ?? []).map((c) => c.id),
+    });
+    if (result.openDetail) {
+      detail.open({ boardId: current.id, stackId: card.stackId, cardId: card.id });
+    } else {
+      selection = result.selection;
+    }
   }
 
   function handleOpenInboxCard({ card }) {
-    detail.open({ boardId: inbox.state.board.id, stackId: card.stackId, cardId: card.id });
+    const stack = allStacks.find((s) => s.id === card.stackId);
+    const result = applyCardClick(selection, {
+      cardId: card.id,
+      stackId: card.stackId,
+      stackCardIds: (stack?.cards ?? []).map((c) => c.id),
+    });
+    if (result.openDetail) {
+      detail.open({ boardId: inbox.state.board.id, stackId: card.stackId, cardId: card.id });
+    } else {
+      selection = result.selection;
+    }
   }
 
   async function loadAssignmentOptions(boardId) {

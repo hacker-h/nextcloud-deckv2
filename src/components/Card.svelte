@@ -1,7 +1,7 @@
 <script>
   import { draggable } from '../lib/dnd.svelte.js';
 
-  let { card, onDrop, onOpenCard, onSelect, selected = false, dragIds } = $props();
+  let { card, onDrop, onOpenCard, onSelect, selected = false, selectionMode = false, dragIds } = $props();
 
   const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const due = $derived.by(() => {
@@ -41,6 +41,15 @@
   })}
 >
   <div class="inner">
+    {#if selectionMode || selected}
+      <div class="checkbox" class:checked={selected} aria-hidden="true">
+        {#if selected}
+          <svg viewBox="0 0 16 16" width="10" height="10" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M3.5 8.5l3 3 6-6"/>
+          </svg>
+        {/if}
+      </div>
+    {/if}
     {#if labels.length}
       <div class="labels">
         {#each labels as l (l.id)}
@@ -94,6 +103,7 @@
 
 <style>
   .card {
+    position: relative;
     display: block;
     /* Cards are flex items in a column container. Without this they shrink
        below their content once the stack overflows, and the meta row spills
@@ -117,6 +127,27 @@
   .selected {
     background: var(--card-bg-hover);
     box-shadow: inset 0 0 0 2px rgb(0, 95, 204);
+  }
+
+  .checkbox {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 3px;
+    border: 1.5px solid var(--text-dim, #7a869a);
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    pointer-events: none;
+    transition-duration: 0s;
+  }
+  .checkbox.checked {
+    background: #005fcc;
+    border-color: #005fcc;
   }
 
   /* Trello: padding 8px 12px 4px, min-height 36px on the card itself. */

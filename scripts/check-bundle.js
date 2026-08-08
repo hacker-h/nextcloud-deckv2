@@ -64,6 +64,7 @@ function loadLocalSecrets() {
 const envSecrets = loadLocalSecrets();
 const bundleChecks = [
   { kind: 'Basic authorization value', pattern: /Basic\s+[A-Za-z0-9+/=]{16,}/g },
+  { kind: 'Bearer authorization value', pattern: /Bearer\s+[A-Za-z0-9+/=._-]{16,}/g },
   { kind: 'Nextcloud app-password shape', pattern: /\b[A-Za-z0-9]{5}(-[A-Za-z0-9]{5}){4}\b/g },
   ...envSecrets.checks,
 ];

@@ -7,8 +7,10 @@ import {
   registerTestCard,
   installMutationGuard,
 } from './fixtures.js';
+import { assertOpaque } from './pixels.js';
 
 test.describe('smoke', () => {
+
   test('app loads the dedicated test board', async ({ guardedPage: page, inbox }) => {
     await page.goto('/');
 
@@ -96,27 +98,19 @@ test.describe('smoke', () => {
   // switcher menu's z-index inside it. Anything on the board that forms its own
   // context then paints over the open menu, so the overlap is asserted here in
   // a real engine - jsdom has no layout and cannot catch it.
-  test('the open board switcher covers the board beneath it', async ({ guardedPage: page }) => {
+  test('the open board switcher is visually opaque over the board', async ({ guardedPage: page }) => {
     await page.goto('/');
     await expect(page.locator('[data-stack-id]').first()).toBeVisible({ timeout: 15_000 });
 
     await page.locator('.trigger').click();
     await expect(page.locator('.menu')).toBeVisible();
 
-    const covered = await page.evaluate(() => {
-      const menu = document.querySelector('.menu').getBoundingClientRect();
-      const overlapped = [];
-      for (const el of document.querySelectorAll('.board .add, .board [data-card-id]')) {
-        const r = el.getBoundingClientRect();
-        const x = Math.max(r.left, menu.left) + 4;
-        const y = Math.max(r.top, menu.top) + 4;
-        if (x >= Math.min(r.right, menu.right) || y >= Math.min(r.bottom, menu.bottom)) continue;
-        overlapped.push(document.elementsFromPoint(x, y).some((hit) => hit.closest('.menu')));
-      }
-      return { count: overlapped.length, allCoveredByMenu: overlapped.every(Boolean) };
+    const result = await assertOpaque(page, '.menu', {
+      expected: [28, 29, 32], // var(--bg) baseline
+      exclude: ['.search'],
     });
 
-    expect(covered.count).toBeGreaterThan(0);
-    expect(covered.allCoveredByMenu).toBe(true);
+    expect(result.total).toBeGreaterThan(0);
+    expect(result.foreignCount).toBe(0);
   });
 });

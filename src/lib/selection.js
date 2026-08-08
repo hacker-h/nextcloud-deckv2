@@ -6,6 +6,24 @@ export function emptySelection() {
   return { ids: [], anchor: null, anchorStackId: null };
 }
 
+export function applyCardClick(selection, { cardId, stackId, stackCardIds }) {
+  const ids = selection.ids ?? [];
+  if (ids.length === 0) {
+    return { openDetail: true, selection };
+  }
+  const nextIds = ids.includes(cardId)
+    ? ids.filter((id) => id !== cardId)
+    : [...ids, cardId];
+  return {
+    openDetail: false,
+    selection: {
+      ids: nextIds,
+      anchor: nextIds.length === 0 ? null : (selection.anchor ?? cardId),
+      anchorStackId: nextIds.length === 0 ? null : (selection.anchorStackId ?? stackId),
+    },
+  };
+}
+
 export function applyShiftClick(selection, { cardId, stackId, stackCardIds }) {
   const ids = selection.ids ?? [];
 

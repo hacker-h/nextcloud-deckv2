@@ -29,7 +29,7 @@
           <div class="placeholder" style="height:{h}px"></div>
         {/each}
       {/if}
-      <Card {card} {onDrop} {onOpenCard} {onSelect} {dragIds} selected={selectedIds.includes(card.id)} />
+      <Card {card} {onDrop} {onOpenCard} {onSelect} {dragIds} selected={selectedIds.includes(card.id)} selectionMode={selectedIds.length > 0} />
     {/each}
     {#if placeholderAt >= visible.length}
       {#each placeholderHeights as h}
