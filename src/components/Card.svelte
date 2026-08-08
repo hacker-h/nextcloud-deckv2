@@ -1,7 +1,11 @@
 <script>
   import { draggable } from '../lib/dnd.svelte.js';
+  import ImageLightbox from './ImageLightbox.svelte';
 
   let { card, onDrop, onOpenCard, onSelect, selected = false, selectionMode = false, dragIds } = $props();
+
+  let lightboxSrc = $state(null);
+  let lightboxTitle = $state('');
 
   const MONTHS = ['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
   const due = $derived.by(() => {
@@ -13,6 +17,32 @@
   const labels = $derived(card.labels ?? []);
   const hasDesc = $derived(Boolean(card.description?.trim()));
   const hasMeta = $derived(due || hasDesc || card.commentsCount > 0 || card.attachmentCount > 0);
+
+  const imageAttachment = $derived.by(() => {
+    if (card.coverUrl) return { url: card.coverUrl, name: card.title };
+    if (!card.attachments?.length) return null;
+    return card.attachments.find((a) =>
+      a.mimetype?.startsWith('image/') ||
+      /\.(png|jpe?g|gif|svg|webp)$/i.test(a.name ?? '')
+    );
+  });
+
+  const thumbnailUrl = $derived.by(() => {
+    if (!imageAttachment) return null;
+    if (imageAttachment.url) return imageAttachment.url;
+    if (imageAttachment.id && card.boardId && card.stackId && card.id) {
+      return `/api/v1.0/boards/${card.boardId}/stacks/${card.stackId}/cards/${card.id}/attachments/${imageAttachment.id}/file`;
+    }
+    return null;
+  });
+
+  function openThumb(e) {
+    e.stopPropagation();
+    if (thumbnailUrl) {
+      lightboxSrc = thumbnailUrl;
+      lightboxTitle = imageAttachment?.name ?? card.title;
+    }
+  }
 
   // Keyboard activation bypasses the pointer gesture machine entirely: there is
   // no drag to disambiguate, so Enter/Space open the card directly.
@@ -58,7 +88,21 @@
       </div>
     {/if}
 
-    <span class="title">{card.title}</span>
+    <div class="card-content">
+      <span class="title">{card.title}</span>
+      {#if thumbnailUrl}
+        <button
+          class="thumb-btn"
+          type="button"
+          onclick={openThumb}
+          onpointerdown={(e) => e.stopPropagation()}
+          title="Vorschau vergrößern"
+          aria-label="Vorschau vergrößern"
+        >
+          <img src={thumbnailUrl} alt={imageAttachment?.name ?? card.title} class="thumb-img" />
+        </button>
+      {/if}
+    </div>
 
     {#if hasMeta}
       <div class="meta">
@@ -72,7 +116,7 @@
           </span>
         {/if}
         {#if hasDesc}
-          <span class="badge" title="This card has a description" aria-label="Has description">
+          <span class="badge" title="Diese Karte hat eine Beschreibung" aria-label="Hat eine Beschreibung">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="currentColor" aria-hidden="true">
               <rect x="2" y="3.6" width="12" height="1.3" rx=".65"/>
               <rect x="2" y="7.35" width="12" height="1.3" rx=".65"/>
@@ -81,7 +125,7 @@
           </span>
         {/if}
         {#if card.commentsCount > 0}
-          <span class="badge" title="{card.commentsCount} comments">
+          <span class="badge" title="{card.commentsCount} Kommentare">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
               <path d="M14 9.4a1.9 1.9 0 0 1-1.9 1.9H5.4L2 14.2V3.5a1.9 1.9 0 0 1 1.9-1.9h8.2A1.9 1.9 0 0 1 14 3.5z" stroke-linejoin="round"/>
             </svg>
@@ -89,7 +133,7 @@
           </span>
         {/if}
         {#if card.attachmentCount > 0}
-          <span class="badge" title="{card.attachmentCount} attachments">
+          <span class="badge" title="{card.attachmentCount} Anhänge">
             <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" aria-hidden="true">
               <path d="M10.5 5.5 6 10a1.8 1.8 0 0 0 2.5 2.5l4.5-4.5a3.2 3.2 0 0 0-4.5-4.5L3.6 8.4a4.6 4.6 0 0 0 6.5 6.5"/>
             </svg>
@@ -100,6 +144,10 @@
     {/if}
   </div>
 </div>
+
+{#if lightboxSrc}
+  <ImageLightbox src={lightboxSrc} title={lightboxTitle} onClose={() => (lightboxSrc = null)} />
+{/if}
 
 <style>
   .card {
@@ -158,11 +206,41 @@
     padding: 8px 12px;
   }
 
+  .card-content {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
   .title {
+    flex: 1;
     display: block;
     font-size: var(--font-size);
     line-height: var(--line-height);
     word-break: break-word;
+  }
+
+  .thumb-btn {
+    flex: 0 0 auto;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    overflow: hidden;
+  }
+  .thumb-btn:hover {
+    outline: 2px solid var(--accent);
+  }
+
+  .thumb-img {
+    display: block;
+    width: 44px;
+    height: 32px;
+    object-fit: cover;
+    border-radius: 4px;
   }
 
   .labels { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
