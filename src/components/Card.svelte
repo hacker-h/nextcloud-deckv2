@@ -50,43 +50,61 @@
     }
   }
 
+  let dragDepth = $state(0);
+
+  function detectDragType(dt) {
+    if (!dt) return 'file';
+    const types = Array.from(dt.types || []);
+    if (types.includes('text/uri-list')) return 'link';
+    if ((types.includes('text/plain') || types.includes('text/html')) && !types.includes('Files')) {
+      return 'link';
+    }
+    if (types.includes('Files')) return 'file';
+    return 'link';
+  }
+
   function onTileDragOver(e) {
     const dt = e.dataTransfer;
-    if (dt?.types?.includes('Files') || dt?.types?.includes('text/uri-list') || dt?.types?.includes('text/plain')) {
+    if (!dt) return;
+    const isDragPayload = dt.types?.includes('Files') || dt.types?.includes('text/uri-list') || dt.types?.includes('text/plain') || dt.types?.includes('text/html');
+    if (isDragPayload) {
       e.preventDefault();
       e.stopPropagation();
-      isDraggingOver = true;
+      e.dataTransfer.dropEffect = 'copy';
     }
   }
 
   function onTileDragEnter(e) {
     const dt = e.dataTransfer;
-    if (dt?.types?.includes('Files') || dt?.types?.includes('text/uri-list') || dt?.types?.includes('text/plain')) {
-      e.preventDefault();
-      e.stopPropagation();
-      if (dt.types.includes('text/uri-list')) dragType = 'link';
-      else dragType = 'file';
-      isDraggingOver = true;
-    }
+    if (!dt) return;
+    const isDragPayload = dt.types?.includes('Files') || dt.types?.includes('text/uri-list') || dt.types?.includes('text/plain') || dt.types?.includes('text/html');
+    if (!isDragPayload) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    dragDepth += 1;
+    dragType = detectDragType(dt);
+    isDraggingOver = true;
   }
 
   function onTileDragLeave(e) {
     e.preventDefault();
     e.stopPropagation();
-    if (e.target === e.currentTarget || !e.relatedTarget) {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) {
       isDraggingOver = false;
     }
   }
 
   async function onTileDrop(e) {
-    const dt = e.dataTransfer;
-    if (!dt?.files?.length && !dt?.getData('text/uri-list') && !dt?.getData('text/plain')) {
-      return;
-    }
-
     e.preventDefault();
     e.stopPropagation();
+    dragDepth = 0;
     isDraggingOver = false;
+
+    const dt = e.dataTransfer;
+    if (!dt) return;
 
     const uri = dt.getData('text/uri-list') || dt.getData('text/plain');
     if (uri && /^https?:\/\/[^\s]+$/i.test(uri.trim()) && onAttachLink) {
@@ -373,17 +391,20 @@
   .card-drop-overlay {
     position: absolute;
     inset: 0;
-    z-index: 10;
+    z-index: 100;
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    padding: 6px;
-    background: rgba(0, 95, 204, 0.92);
+    gap: 6px;
+    padding: 8px;
+    background: #0057d7; /* 100% OPAQUE SOLID TRELLO BLUE */
     color: #ffffff;
     font-size: 13px;
     font-weight: 600;
     text-align: center;
-    border-radius: var(--card-radius);
+    border-radius: var(--card-radius, 8px);
     pointer-events: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
   }
 </style>

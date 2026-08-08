@@ -140,6 +140,17 @@
     }
   }
 
+  function detectDragType(dt) {
+    if (!dt) return 'file';
+    const types = Array.from(dt.types || []);
+    if (types.includes('text/uri-list')) return 'link';
+    if ((types.includes('text/plain') || types.includes('text/html')) && !types.includes('Files')) {
+      return 'link';
+    }
+    if (types.includes('Files')) return 'file';
+    return 'link';
+  }
+
   function onModalDragOver(e) {
     e.preventDefault();
     e.stopPropagation();
@@ -150,18 +161,18 @@
     e.preventDefault();
     e.stopPropagation();
     const dt = e.dataTransfer;
-    if (dt?.types?.includes('text/uri-list') || dt?.types?.includes('text/plain')) {
-      dragType = 'link';
-    } else {
-      dragType = 'file';
-    }
+    if (!dt) return;
+
+    dragDepth += 1;
+    dragType = detectDragType(dt);
     isDraggingOver = true;
   }
 
   function onModalDragLeave(e) {
     e.preventDefault();
     e.stopPropagation();
-    if (e.target === e.currentTarget || !e.relatedTarget) {
+    dragDepth = Math.max(0, dragDepth - 1);
+    if (dragDepth === 0) {
       isDraggingOver = false;
     }
   }
@@ -169,6 +180,7 @@
   async function onModalDrop(e) {
     e.preventDefault();
     e.stopPropagation();
+    dragDepth = 0;
     isDraggingOver = false;
 
     const dt = e.dataTransfer;
@@ -188,7 +200,7 @@
 
     const file = dt.files?.[0];
     if (file && onUploadAttachment) {
-      toast = { status: 'uploading', message: 'Datei wird hochgeladen ...' };
+      toast = { status: 'uploading', message: 'Datei wird hochgeladen...' };
       try {
         await onUploadAttachment(file);
         toast = { status: 'success', message: 'Erfolgreich' };
@@ -241,7 +253,7 @@
           <svg viewBox="0 0 16 16" width="36" height="36" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
             <path d="M8 2.5v8M4.5 7L8 10.5 11.5 7M2.5 13.5h11"/>
           </svg>
-          <span>Dateien für Upload ablegen.</span>
+          <span>{dragType === 'link' ? 'Link anhängen' : 'Dateien für Upload ablegen.'}</span>
         </div>
       </div>
     {/if}
@@ -384,10 +396,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(15, 23, 42, 0.85);
-    border: 2px dashed #005fcc;
+    background: #0f172a; /* 100% OPAQUE SOLID DARK BACKGROUND */
+    border: 2px dashed #0057d7;
     border-radius: var(--modal-radius, 12px);
-    backdrop-filter: blur(4px);
     pointer-events: none;
   }
 
