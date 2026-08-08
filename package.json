@@ -1,5 +1,6 @@
 {
   "name": "nextcloud-deckv2",
+  "description": "A ultra-fast, modern, responsive Trello-inspired web client for Nextcloud Deck",
   "private": true,
   "version": "0.1.0",
   "type": "module",
