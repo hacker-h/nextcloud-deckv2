@@ -116,13 +116,13 @@
     position: absolute;
     top: calc(100% + 6px);
     left: 0;
-    z-index: 20;
+    z-index: 100;
     width: 300px;
     padding: 8px;
-    background: var(--stack-bg);
+    background: #1E2227;
     border: 1px solid var(--border);
     border-radius: 10px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .45);
+    box-shadow: 0 10px 32px rgba(0, 0, 0, .85);
   }
 
   .search {
