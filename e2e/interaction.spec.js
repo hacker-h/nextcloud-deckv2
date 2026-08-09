@@ -45,7 +45,7 @@ async function routeDetailReads(page) {
 }
 
 async function closeDialog(page) {
-  await page.getByLabel('Close card detail').click();
+  await page.getByLabel('Kartendetails schließen').click();
   await expect.poll(() => dialogCount(page)).toBe(0);
 }
 

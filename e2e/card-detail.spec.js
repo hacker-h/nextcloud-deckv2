@@ -140,25 +140,32 @@ async function openCard(page, id) {
 }
 
 async function closeDialog(page) {
-  await page.getByLabel('Close card detail').click();
+  await page.getByLabel('Kartendetails schließen').click();
   await expect(dialog(page)).toHaveCount(0);
 }
 
 async function deleteThroughUi(page, title) {
-  await page.getByRole('button', { name: 'Actions' }).click();
-  await page.getByRole('menuitem', { name: 'Delete card' }).click();
-  await page.getByLabel('Confirm card title').fill(title);
-  await page.getByRole('alertdialog', { name: 'Confirm delete' }).getByRole('button', { name: 'Delete card' }).click();
+  await page.getByRole('button', { name: 'Aktionen' }).click();
+  await page.getByRole('menuitem', { name: 'Karte löschen' }).click();
+  await page.getByLabel('Kartentitel bestätigen').fill(title);
+  await page.getByRole('alertdialog', { name: 'Löschen bestätigen' }).getByRole('button', { name: 'Karte löschen' }).click();
   await expect(dialog(page)).toHaveCount(0);
 }
 
+function datePicker(page) {
+  return page.getByRole('dialog', { name: 'Fälligkeitsdatum ändern' });
+}
+
 async function commitDue(page, cardId, value) {
-  const input = dialog(page).getByLabel('Due date');
-  if (value !== undefined) await input.fill(value);
+  await dialog(page).getByRole('button', { name: 'Ablaufdatum' }).click();
+  const picker = datePicker(page);
+  await expect(picker).toBeVisible();
+  await picker.getByLabel('Fälligkeitsdatum').fill(value.slice(0, 10));
+  await picker.getByLabel('Uhrzeit').fill(value.slice(11, 16));
   const saved = page.waitForResponse(
     (res) => res.request().method() === 'PUT' && res.url().includes(`${fullPath(cardId)}`),
   );
-  await input.evaluate((node) => node.dispatchEvent(new Event('change', { bubbles: true })));
+  await picker.getByRole('button', { name: 'Speichern' }).click();
   await saved;
 }
 
@@ -214,43 +221,46 @@ test.describe('card detail live CRUD', () => {
       await dialog(page).getByRole('textbox', { name: 'Card title' }).press('Enter');
       await expect(dialog(page)).toContainText(nextTitle);
 
-      await page.getByRole('button', { name: 'Add a more detailed description' }).click();
-      await page.getByLabel('Card description').fill(description);
-      await dialog(page).getByRole('button', { name: 'Save', exact: true }).click();
+      await page.getByRole('button', { name: 'Fügen Sie eine detailliertere Beschreibung hinzu' }).click();
+      await page.getByLabel('Beschreibung der Karte').fill(description);
+      await dialog(page).getByRole('button', { name: 'Speichern', exact: true }).click();
       await expect(page.getByTestId('description')).toHaveText(description);
 
       await commitDue(page, fixture.id, dueLocal);
       await expect.poll(async () => (await getCard(deck, fixture.id)).duedate).toBe(dueApi);
 
-      await page.getByRole('button', { name: 'Edit labels' }).click();
+      await page.getByRole('button', { name: 'Labels bearbeiten' }).click();
       await page.getByRole('checkbox', { name: label.title }).click();
       await expect.poll(async () => ((await getCard(deck, fixture.id)).labels ?? []).map((entry) => entry.id)).toContain(label.id);
 
-      await page.getByRole('button', { name: 'Edit members' }).click();
+      await page.getByRole('button', { name: 'Mitglieder bearbeiten' }).click();
       await page.getByRole('checkbox', { name: person.displayName }).click();
       await expect.poll(async () => ((await getCard(deck, fixture.id)).assignedUsers ?? []).map(normalizeAssigned)).toContainEqual(
         expect.objectContaining({ id: person.id }),
       );
 
-      await page.getByLabel('Write a comment').fill(comment);
-      await page.getByRole('button', { name: 'Comment' }).click();
+      await page.getByLabel('Kommentar schreiben').fill(comment);
+      await page.getByRole('button', { name: 'Kommentieren' }).click();
       await expect(dialog(page)).toContainText(comment);
 
-      await page.getByLabel('Attach a file').setInputFiles(attachmentPath);
+      await page.getByLabel('Datei anhängen').setInputFiles(attachmentPath);
       await expect(dialog(page)).toContainText('detail-test.txt');
       await expect.poll(async () => (await getCard(deck, fixture.id)).commentsCount, { timeout: 15_000 }).toBe(1);
 
       await closeDialog(page);
       const tile = card(page, fixture.id);
       await expect(tile).toContainText(nextTitle);
-      await expect(tile.getByLabel('Has description')).toBeVisible();
-      await expect(tile.locator('[title="1 comments"]')).toBeVisible();
+      await expect(tile.getByLabel('Hat eine Beschreibung')).toBeVisible();
+      await expect(tile.locator('[title="1 Kommentare"]')).toBeVisible();
       await expect(tile.locator(`[title="${label.title}"]`)).toBeVisible();
 
       await openCard(page, fixture.id);
       await expect(dialog(page)).toContainText(nextTitle);
       await expect(page.getByTestId('description')).toHaveText(description);
-      await expect(page.getByLabel('Due date')).toHaveValue(dueLocal);
+      await dialog(page).getByRole('button', { name: 'Ablaufdatum' }).click();
+      await expect(datePicker(page).getByLabel('Fälligkeitsdatum')).toHaveValue(dueLocal.slice(0, 10));
+      await expect(datePicker(page).getByLabel('Uhrzeit')).toHaveValue(dueLocal.slice(11, 16));
+      await datePicker(page).getByRole('button', { name: 'Schließen' }).click();
       await expect(dialog(page)).toContainText(label.title);
       await expect(dialog(page)).toContainText(comment);
       await expect(dialog(page)).toContainText('detail-test.txt');
@@ -279,9 +289,9 @@ test.describe('card detail live CRUD', () => {
       await openTestBoard(page);
       await page.reload();
       await openCard(page, fixture.id);
-      await page.getByRole('button', { name: 'Actions' }).click();
-      await page.getByRole('menuitem', { name: 'Archive card' }).click();
-      await page.getByRole('alertdialog', { name: 'Confirm archive' }).getByRole('button', { name: 'Archive' }).click();
+      await page.getByRole('button', { name: 'Aktionen' }).click();
+      await page.getByRole('menuitem', { name: 'Karte archivieren' }).click();
+      await page.getByRole('alertdialog', { name: 'Archivieren bestätigen' }).getByRole('button', { name: 'Archivieren' }).click();
       await expect(dialog(page)).toHaveCount(0);
       await expect.poll(async () => Boolean((await getCard(deck, fixture.id)).archived)).toBe(true);
 
@@ -329,12 +339,12 @@ test.describe('card detail live CRUD', () => {
       await dialog(page).getByRole('textbox', { name: 'Card title' }).press('Enter');
       await expect(dialog(page).getByRole('alert')).toHaveText('forced detail save failure');
       await expect(dialog(page).getByRole('button', { name: fixture.title })).toBeVisible();
-      await expect(dialog(page).getByRole('textbox', { name: 'Write a comment' })).toBeVisible();
+      await expect(dialog(page).getByRole('textbox', { name: 'Kommentar schreiben' })).toBeVisible();
       expect((await getCard(deck, fixture.id)).title).toBe(fixture.title);
 
       await page.unroute(new RegExp(`/boards/${TEST_BOARD_ID}/stacks/${TEST_STACKS.inbox}/cards/${fixture.id}(?:[?#]|$)`));
-      await page.getByLabel('Close card detail').click();
-      await page.getByRole('alertdialog', { name: 'Unsaved changes' }).getByRole('button', { name: 'Save', exact: true }).click();
+      await page.getByLabel('Kartendetails schließen').click();
+      await page.getByRole('alertdialog', { name: 'Ungespeicherte Änderungen' }).getByRole('button', { name: 'Speichern', exact: true }).click();
       await expect(dialog(page)).toHaveCount(0);
       await expect.poll(async () => (await getCard(deck, fixture.id)).title).toBe(failedTitle);
     } finally {

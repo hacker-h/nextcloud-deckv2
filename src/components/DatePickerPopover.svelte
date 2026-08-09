@@ -14,7 +14,13 @@
 </script>
 
 <div class="popover-backdrop" onclick={onClose} role="presentation">
-  <div class="popover" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+  <div
+    class="popover"
+    onclick={(e) => e.stopPropagation()}
+    role="dialog"
+    aria-modal="true"
+    aria-label="Fälligkeitsdatum ändern"
+  >
     <div class="popover-header">
       <span class="popover-title">Fälligkeitsdatum ändern</span>
       <button class="close-btn" onclick={onClose} aria-label="Schließen">✕</button>
@@ -32,6 +38,7 @@
         <input
           type="time"
           class="time-input"
+          aria-label="Uhrzeit"
           bind:value={timeValue}
         />
       </div>

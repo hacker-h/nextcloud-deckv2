@@ -76,21 +76,21 @@ test.describe('cross-board inbox', () => {
     await openTestBoard(page);
 
     await expect(inboxPanel(page)).toBeVisible();
-    await expect(inboxPanel(page).getByRole('heading', { name: 'Inbox' })).toBeVisible();
+    await expect(inboxPanel(page).getByRole('heading', { name: 'Posteingang' })).toBeVisible();
     await expect(page.getByRole('option', { name: /managed, do not edit/ })).toHaveCount(0);
   });
 
   test('collapsing the inbox persists across a reload', async ({ guardedPage: page }) => {
     await openTestBoard(page);
 
-    await page.getByRole('button', { name: 'Collapse inbox' }).click();
+    await page.getByRole('button', { name: 'Posteingang einklappen' }).click();
     await expect(inboxPanel(page)).toHaveClass(/collapsed/);
 
     await page.reload();
     await expect(page.locator('[data-stack-id]').first()).toBeVisible({ timeout: 15_000 });
     await expect(inboxPanel(page)).toHaveClass(/collapsed/);
 
-    await page.getByRole('button', { name: 'Expand inbox' }).click();
+    await page.getByRole('button', { name: 'Posteingang erweitern' }).click();
     await expect(inboxPanel(page)).not.toHaveClass(/collapsed/);
   });
 

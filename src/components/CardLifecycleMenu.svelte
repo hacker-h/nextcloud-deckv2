@@ -73,7 +73,11 @@
   {/if}
 
   {#if confirming === 'archive' || confirming === 'unarchive'}
-    <div class="confirm" role="alertdialog" aria-label="{confirming} bestätigen">
+    <div
+      class="confirm"
+      role="alertdialog"
+      aria-label={confirming === 'archive' ? 'Archivieren bestätigen' : 'Wiederherstellen bestätigen'}
+    >
       <p class="copy">
         {confirming === 'archive'
           ? `"${title}" archivieren? Die Karte verlässt das Board und bleibt im Archiv verfügbar.`

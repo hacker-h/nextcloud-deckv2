@@ -102,7 +102,7 @@ test.describe('multi-card drag', () => {
       await card(page, moving[0]).click({ modifiers: ['Shift'] });
       await card(page, moving[1]).click({ modifiers: ['Shift'] });
 
-      await page.getByLabel('Move selection to list').selectOption(String(TEST_STACKS.done));
+      await page.getByLabel('Selection to list').selectOption(String(TEST_STACKS.done));
 
       for (const id of moving) {
         await expect.poll(() => apiStackOf(deck, id), { timeout: 20_000 }).toBe(TEST_STACKS.done);

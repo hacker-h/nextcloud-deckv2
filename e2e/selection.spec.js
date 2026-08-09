@@ -14,9 +14,9 @@ async function openTestBoard(page) {
 }
 
 async function cardIdsIn(page, stackId) {
-  return page
-    .locator(`[data-stack-id="${stackId}"] [data-card-id]`)
-    .evaluateAll((els) => els.map((el) => Number(el.dataset.cardId)));
+  const cards = page.locator(`[data-stack-id="${stackId}"] [data-card-id]`);
+  await expect(cards).toHaveCount(3);
+  return cards.evaluateAll((els) => els.map((el) => Number(el.dataset.cardId)));
 }
 
 test.describe('multi-select', () => {
@@ -96,6 +96,6 @@ test.describe('multi-select', () => {
     await card(page, ids[0]).click({ modifiers: ['Shift'] });
     await card(page, ids[2]).click({ modifiers: ['Shift'] });
 
-    await expect(page.getByText('3 selected')).toBeVisible();
+    await expect(page.getByText('3 ausgewählt')).toBeVisible();
   });
 });
