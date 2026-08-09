@@ -9,6 +9,12 @@ on:
   pull_request:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: 'Run the production smoke tests against the live deployment'
+        type: boolean
+        default: false
 
 env:
   REGISTRY: ghcr.io
@@ -117,17 +123,21 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-  # Post-deploy verification against the real deployment. The entire suite above
-  # runs against localhost, so a green build proves the source tree is correct -
-  # not that the deployed artifact loads. Every bug in the QA audit was reported
-  # against the live host, so the live host is what gets checked here.
+  # Post-deploy verification against the live production deployment.
   #
-  # Runs only after a real publish (never on pull_request, where nothing was
-  # pushed) and is allowed to fail the workflow without rolling anything back:
-  # it reports, it does not gate, because the image is already out by this point.
+  # This job cannot run automatically as part of the publish pipeline for two
+  # environmental reasons:
+  # 1. The target host (deckv2.xhacker.de) is IPv6-only (AAAA record only),
+  #    whereas GitHub-hosted runners lack IPv6 connectivity and fail immediately
+  #    with net::ERR_NAME_NOT_RESOLVED before making any HTTP request.
+  # 2. Deployment is not immediate: the host runs Watchtower on a once-daily
+  #    schedule (04:00 Europe/London), so polling for 5 minutes right after
+  #    publishing would time out for up to 24 hours.
+  #
+  # This job is therefore manual-only and requires execution on a runner with
+  # IPv6 reachability to the target host.
   prod-smoke:
-    needs: build-and-push
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.smoke }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
