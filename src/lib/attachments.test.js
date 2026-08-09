@@ -150,7 +150,20 @@ describe('attachment operations', () => {
 
     const blob = await downloadAttachment(client(), TARGET, 88);
 
-    expect(blob).toBeInstanceOf(Blob);
+    // Duck-typed on purpose. Response.blob() and the jsdom Blob global are two
+    // different classes, and which one you get flips with the Node version:
+    // on 22 the result is undici's Blob (so `instanceof Blob` is false, but
+    // .text() works), on 24+ it is jsdom's (so instanceof passes, but .text(),
+    // .arrayBuffer() and .stream() are all absent, and re-reading it through
+    // `new Response(blob)` yields the string "[object Blob]").
+    //
+    // constructor.name, size and type are the only things both realms agree
+    // on, so they are what this asserts. The point of the test is the transport
+    // - a blob response came back and no credentials appeared in the URL - not
+    // which realm minted the object.
+    expect(blob?.constructor?.name).toBe('Blob');
+    expect(blob.type).toBe('text/plain');
+    expect(blob.size).toBe('card detail QA\n'.length);
     expect(fetch.mock.calls[0][0]).toBe(`${BASE}/88`);
     expect(fetch.mock.calls[0][0]).not.toContain('app-password');
     expect(fetch.mock.calls[0][1].headers).not.toHaveProperty('Authorization');
