@@ -30,6 +30,13 @@ jobs:
       image: mcr.microsoft.com/playwright:v1.62.1-noble
       options: --user 1001
 
+    # The build sha is normally read from git, but actions/checkout inside a
+    # container leaves a repo this step's user does not own, so git refuses to
+    # read it and build-info falls back to 'unknown'. Supplying it explicitly is
+    # the documented path and is what the published image already does.
+    env:
+      BUILD_SHA: ${{ github.sha }}
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
