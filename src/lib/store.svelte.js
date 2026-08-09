@@ -10,6 +10,7 @@ import { ORDER_STEP } from './deck.js';
 export function createBoardStore(client) {
   const s = $state({
     stacks: [],
+    boardId: null,
     loading: true,
     error: null,
     toast: null,
@@ -25,6 +26,7 @@ export function createBoardStore(client) {
   }
 
   async function load(boardId) {
+    s.boardId = boardId;
     s.loading = true;
     s.error = null;
     try {
@@ -35,6 +37,22 @@ export function createBoardStore(client) {
       s.stacks = [];
     } finally {
       s.loading = false;
+    }
+  }
+
+  // Re-reads the current board without the loading flag. Callers that mutate a
+  // card out-of-band (a tile drop attaching a file, say) need the tile to pick
+  // up the new attachment count, but flipping `loading` would blank the board
+  // and undo section 4.1's "never a global loading state".
+  async function refresh() {
+    if (s.boardId == null) return;
+    try {
+      const { data } = await client.getStacks(s.boardId);
+      s.stacks = data;
+    } catch {
+      // A failed refresh is cosmetic: the mutation itself already succeeded and
+      // the stale tile corrects itself on the next load. Surfacing an error here
+      // would contradict the success the caller is about to report.
     }
   }
 
@@ -217,6 +235,7 @@ export function createBoardStore(client) {
   return {
     state: s,
     load,
+    refresh,
     moveCards,
     replaceCard,
     removeCard,

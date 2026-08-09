@@ -258,10 +258,21 @@
     border: 1px dashed #38414a;
     border-radius: 8px;
     background: #22272b;
+    /* The sidebar column is 200px and a native file input reports a much wider
+       intrinsic width, so without this the dropzone spilled out of the column
+       and over the text beside it. */
+    min-width: 0;
+    overflow: hidden;
   }
   .dragging { border-color: #579dff; background: #2c333a; }
 
-  .file { color: #9fadbc; font: inherit; }
+  .file {
+    color: #9fadbc;
+    font: inherit;
+    min-width: 0;
+    max-width: 100%;
+    font-size: 12px;
+  }
 
   .links-subhead {
     margin-left: 28px;

@@ -29,30 +29,35 @@
 
   let tileToast = $state(null);
 
-  async function handleTileUploadAttachment(card, file) {
-    tileToast = { status: 'uploading', message: 'Datei wird hochgeladen...' };
+  // Only the attachment call itself may decide success or failure. An earlier
+  // version awaited the board refresh inside the same try, so anything that
+  // threw after a successful upload - and `board.refresh` did not exist, so it
+  // threw every time - replaced the success toast with an error one. The drop
+  // had worked; the UI reported that it had not.
+  async function runTileAttach(card, pending, failure, action) {
+    tileToast = { status: 'uploading', message: pending };
     try {
-      await uploadAttachment(client, { boardId: card.boardId, stackId: card.stackId, cardId: card.id }, file);
-      tileToast = { status: 'success', message: 'Erfolgreich' };
-      await board.refresh();
-      setTimeout(() => { tileToast = null; }, 3000);
+      await action({ boardId: card.boardId, stackId: card.stackId, cardId: card.id });
     } catch (err) {
-      tileToast = { status: 'error', message: err?.message ?? 'Upload fehlgeschlagen' };
+      tileToast = { status: 'error', message: err?.message ?? failure };
       setTimeout(() => { tileToast = null; }, 4000);
+      return;
     }
+    tileToast = { status: 'success', message: 'Erfolgreich' };
+    setTimeout(() => { tileToast = null; }, 3000);
+    await board.refresh();
   }
 
-  async function handleTileAttachLink(card, uri) {
-    tileToast = { status: 'uploading', message: 'Link anhängen' };
-    try {
-      await addLinkAttachment(client, { boardId: card.boardId, stackId: card.stackId, cardId: card.id }, uri);
-      tileToast = { status: 'success', message: 'Erfolgreich' };
-      await board.refresh();
-      setTimeout(() => { tileToast = null; }, 3000);
-    } catch (err) {
-      tileToast = { status: 'error', message: err?.message ?? 'Link konnte nicht angehängt werden' };
-      setTimeout(() => { tileToast = null; }, 4000);
-    }
+  function handleTileUploadAttachment(card, file) {
+    return runTileAttach(card, 'Datei wird hochgeladen...', 'Upload fehlgeschlagen', (target) =>
+      uploadAttachment(client, target, file)
+    );
+  }
+
+  function handleTileAttachLink(card, uri) {
+    return runTileAttach(card, 'Link anhängen', 'Link konnte nicht angehängt werden', (target) =>
+      addLinkAttachment(client, target, uri)
+    );
   }
 
   // Detail saves must repaint the board tile, so the store pushes every fresh
@@ -364,6 +369,8 @@
       onRetry={detail.refreshCard}
       onSave={detail.saveCore}
       onDiscard={detail.discardDraft}
+      onUploadAttachment={detail.addAttachment}
+      onAttachLink={detail.addLink}
     >
       {#snippet main()}
         <CardCoreEditor

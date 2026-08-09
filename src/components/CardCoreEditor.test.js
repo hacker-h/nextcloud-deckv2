@@ -134,7 +134,16 @@ describe('CardCoreEditor', () => {
   it('converts a local due date to ISO-8601 without timezone drift', async () => {
     const { onSave } = setup();
 
-    await fireEvent.change(screen.getByLabelText('Ablaufdatum'), { target: { value: '2030-04-05T14:30' } });
+    // The native datetime-local input this replaced was unstyleable: browsers
+    // draw the calendar button and the TT.MM.JJJJ placeholder themselves, in
+    // light chrome, on a dark card. The conversion it guarded is unchanged and
+    // still asserted below.
+    await fireEvent.click(screen.getByLabelText('Ablaufdatum'));
+    await fireEvent.input(screen.getByLabelText('Fälligkeitsdatum'), {
+      target: { value: '2030-04-05' },
+    });
+    await fireEvent.input(document.querySelector('.time-input'), { target: { value: '14:30' } });
+    await fireEvent.submit(document.querySelector('.popover-body'));
 
     const [[payload]] = onSave.mock.calls;
     // Round-tripping through Date proves the wall-clock time survives the
@@ -147,11 +156,19 @@ describe('CardCoreEditor', () => {
     expect(local.getMinutes()).toBe(30);
   });
 
-  it('renders an existing due date back into the local input', () => {
+  it('renders an existing due date into the pill and back into the picker', async () => {
     const iso = new Date(2030, 3, 5, 14, 30).toISOString();
     setup({ card: { ...base, duedate: iso } });
 
-    expect(screen.getByLabelText('Ablaufdatum')).toHaveValue('2030-04-05T14:30');
+    const pill = screen.getByLabelText('Ablaufdatum');
+    expect(pill.textContent).toContain('5');
+    expect(pill.textContent).toContain('14:30');
+
+    // Reopening must show the stored time rather than resetting it to noon,
+    // which would move the deadline the moment the user pressed Speichern.
+    await fireEvent.click(pill);
+    expect(screen.getByLabelText('Fälligkeitsdatum')).toHaveValue('2030-04-05');
+    expect(document.querySelector('.time-input')).toHaveValue('14:30');
   });
 
   it('clears a due date', async () => {

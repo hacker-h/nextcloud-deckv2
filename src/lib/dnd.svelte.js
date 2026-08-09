@@ -30,24 +30,70 @@ export const externalDrop = $state({
   dragType: 'file',
 });
 
+// Clearing this overlay is the whole bug class behind the stale blue rectangles.
+// Every event that "should" clear it is unreliable: dragleave does not fire when
+// the pointer crosses into a child element, it fires with a relatedTarget still
+// inside the page when the pointer moves onto the board background or onto a
+// modal that opened mid-drag, and a drag cancelled with Escape or abandoned
+// outside the window delivers no page event at all (verified via CDP: dragEnter,
+// dragOver, dragOver, then silence).
+//
+// So no single event is trusted. Ownership is re-proven instead: a card must
+// claim the pointer on every dragover, and anything that stops claiming loses
+// the overlay. That makes the invariant structural rather than event-ordering
+// dependent - at most one card can be claiming at a time, so at most one overlay
+// can exist.
+let claims = 0;
+let watchdog = null;
+
+// Comfortably longer than the 350ms cadence the HTML drag model keeps firing
+// dragover at while a drag is live, so a slow or janky drag is never mistaken
+// for an abandoned one; short enough that a cancelled drag clears before the
+// user can wonder why the overlay is still there.
+const STALE_MS = 1200;
+
+function armWatchdog() {
+  if (typeof window === 'undefined') return;
+  if (watchdog) clearTimeout(watchdog);
+  watchdog = setTimeout(clearExternalDrop, STALE_MS);
+}
+
 export function setExternalOverCard(cardId, type = 'file') {
   externalDrop.activeCardId = cardId;
   externalDrop.dragType = type;
+  claims += 1;
+  armWatchdog();
 }
 
 export function clearExternalDrop() {
   externalDrop.activeCardId = null;
   externalDrop.dragType = 'file';
+  if (watchdog) {
+    clearTimeout(watchdog);
+    watchdog = null;
+  }
 }
 
 if (typeof window !== 'undefined') {
   window.addEventListener('dragend', clearExternalDrop);
   window.addEventListener('drop', clearExternalDrop);
-  window.addEventListener('dragleave', (e) => {
-    if (!e.relatedTarget || e.relatedTarget === document.documentElement) {
-      clearExternalDrop();
-    }
-  });
+
+  // Capture phase, so it still runs when a card or the detail modal calls
+  // stopPropagation on the very same event. Listeners run in order
+  // window-capture -> target, so the card's claim lands after this one is
+  // recorded and before the microtask reads it back.
+  window.addEventListener(
+    'dragover',
+    () => {
+      const before = claims;
+      queueMicrotask(() => {
+        // Nothing claimed this dragover, so the pointer is over the board
+        // background, a modal, or some other non-target. No overlay may survive.
+        if (claims === before) clearExternalDrop();
+      });
+    },
+    true
+  );
 }
 
 export function resetDrag() {

@@ -2,6 +2,7 @@ import { archiveCard, deleteCard, getCard, unarchiveCard, updateCard } from './c
 import { assignLabel, assignUser, removeLabel, unassignUser } from './assignments.js';
 import { createComment, deleteComment, listComments, updateComment } from './comments.js';
 import {
+  addLinkAttachment,
   deleteAttachment,
   listAttachments,
   restoreAttachment,
@@ -317,6 +318,15 @@ export function createCardDetailStore(
     return a;
   }
 
+  // Dropping a URL on the open card goes through the same list-patching path as
+  // a file upload; only the request shape differs.
+  async function addLink(uri) {
+    const a = await addLinkAttachment(client, target(), uri);
+    s.attachments = [...s.attachments, a];
+    publishCounts();
+    return a;
+  }
+
   async function replaceAttachment(attachmentId, file, options) {
     const a = await updateAttachment(client, target(), attachmentId, file, options);
     s.attachments = s.attachments.map((x) => (x.id === a.id ? a : x));
@@ -360,6 +370,7 @@ export function createCardDetailStore(
     removeComment,
     reloadAttachments,
     addAttachment,
+    addLink,
     replaceAttachment,
     removeAttachment,
     restoreDeletedAttachment,

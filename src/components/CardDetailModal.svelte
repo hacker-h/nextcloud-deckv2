@@ -1,5 +1,6 @@
 <script>
   import Toast from './Toast.svelte';
+  import { clearExternalDrop } from '../lib/dnd.svelte.js';
 
   let {
     card = null,
@@ -24,6 +25,11 @@
   let toast = $state(null);
   let isDraggingOver = $state(false);
   let dragType = $state('file');
+  // Counts enter/leave pairs so crossing into a child element does not read as
+  // leaving the modal. Never declared before, so every dragenter into the modal
+  // threw ReferenceError and the drop handler never ran: dropping onto an open
+  // card detail was broken outright, not merely mis-styled.
+  let dragDepth = 0;
 
   const titleId = 'card-detail-title';
 
@@ -36,12 +42,20 @@
     const previousOverflow = body.style.overflow;
     body.style.overflow = 'hidden';
 
+    // A card lit by a drag that was still in flight when this modal opened will
+    // never receive another drag event, so it can only be cleared from here.
+    // The reported screenshot was exactly this: blue overlays frozen behind an
+    // open card detail. Cleared on close too, since the modal swallowed every
+    // drag event the board would otherwise have used to correct itself.
+    clearExternalDrop();
+
     const first = dialog?.querySelector(FOCUSABLE);
     if (first) first.focus();
     else dialog?.focus();
 
     return () => {
       body.style.overflow = previousOverflow;
+      clearExternalDrop();
       if (opener?.isConnected) opener.focus();
     };
   });
@@ -154,6 +168,12 @@
   function onModalDragOver(e) {
     e.preventDefault();
     e.stopPropagation();
+    // The board's cards claim ownership of the external-drop overlay on their
+    // own dragover. stopPropagation is not enough to stop them: a card may
+    // already be claiming from before this modal opened, and nothing would ever
+    // clear it. Claiming "no card" on every modal dragover keeps the invariant
+    // in one place instead of relying on event ordering.
+    clearExternalDrop();
     isDraggingOver = true;
   }
 
@@ -163,6 +183,7 @@
     const dt = e.dataTransfer;
     if (!dt) return;
 
+    clearExternalDrop();
     dragDepth += 1;
     dragType = detectDragType(dt);
     isDraggingOver = true;
@@ -305,7 +326,10 @@
   .backdrop {
     position: fixed;
     inset: 0;
-    z-index: 40;
+    /* Above BottomNav's dock (45). At 40 the nav floated over the open card and
+       covered the comment composer, so a modal that is meant to be exclusive
+       had another control painted on top of it. */
+    z-index: 50;
     display: flex;
     justify-content: center;
     /* Trello anchors the card dialog near the top rather than centring it, so

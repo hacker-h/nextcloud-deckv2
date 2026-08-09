@@ -1,8 +1,10 @@
 <script>
-  let { currentDate = '', onSave, onRemove, onClose } = $props();
+  let { currentDate = '', currentTime = '', onSave, onRemove, onClose } = $props();
 
   let dateValue = $state(currentDate || new Date().toISOString().slice(0, 10));
-  let timeValue = $state('12:00');
+  // Reopening the picker on a card that already has a due time must show that
+  // time, not reset it to noon and silently move the deadline on save.
+  let timeValue = $state(currentTime || '12:00');
   let reminder = $state('Keine');
 
   function handleSave(e) {

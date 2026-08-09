@@ -2,6 +2,7 @@
   import { parseChecklists, serializeChecklists } from '../lib/checklist.js';
   import CardChecklist from './CardChecklist.svelte';
   import AddChecklistPopover from './AddChecklistPopover.svelte';
+  import DatePickerPopover from './DatePickerPopover.svelte';
   import { isTemplateCard } from '../lib/cards.js';
 
   let { card, onSave, onDraftChange = () => {}, error = null, members = [], onCreateFromTemplate } = $props();
@@ -11,6 +12,7 @@
   let editingDesc = $state(false);
   let descDraft = $state('');
   let showAddChecklist = $state(false);
+  let showDatePicker = $state(false);
 
   const rawDescription = $derived(card?.description ?? '');
 
@@ -40,6 +42,26 @@
     const t = new Date(card.duedate).getTime();
     return !Number.isNaN(t) && t < Date.now();
   });
+
+  // The pill shows the same shape Trello uses ("26. Aug., 14:00"); the native
+  // datetime-local control it replaced rendered as "TT.MM.JJJJ, --:--" with an
+  // OS-drawn calendar button that ignores the dark theme entirely.
+  const dueLabel = $derived.by(() => {
+    if (!card?.duedate) return null;
+    const d = new Date(card.duedate);
+    if (Number.isNaN(d.getTime())) return null;
+    return d.toLocaleString('de-DE', {
+      day: 'numeric',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  });
+
+  // DatePickerPopover works in date + time halves, so the ISO value is split on
+  // the way in and recombined on the way out.
+  const dueDatePart = $derived(due ? due.slice(0, 10) : '');
+  const dueTimePart = $derived(due ? due.slice(11, 16) : '');
 
   function toLocalInput(iso) {
     if (!iso) return '';
@@ -96,12 +118,17 @@
     descDraft = '';
   }
 
-  async function onDueChange(e) {
-    const value = e.currentTarget.value;
-    await onSave?.({ duedate: value ? new Date(value).toISOString() : null });
+  async function saveDue({ duedate, time }) {
+    showDatePicker = false;
+    if (!duedate) return;
+    const value = `${duedate}T${time || '12:00'}`;
+    const parsed = new Date(value);
+    if (Number.isNaN(parsed.getTime())) return;
+    await onSave?.({ duedate: parsed.toISOString() });
   }
 
   async function clearDue() {
+    showDatePicker = false;
     await onSave?.({ duedate: null });
   }
 
@@ -202,19 +229,13 @@
       </svg>
       Hinzufügen
     </button>
-    <button class="pill-btn" type="button">
-      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-        <path d="M2.5 8.5L8.5 2.5h5v5L7.5 13.5z" />
-      </svg>
-      Labels
-    </button>
-    <button class="pill-btn" type="button">
-      <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
-        <circle cx="8" cy="8" r="6" />
-        <path d="M8 4.5v4l2.5 2.5" />
-      </svg>
-      Datum
-    </button>
+    <!--
+      "Labels" and "Datum" pills used to sit here with no onclick at all. They
+      duplicated the sidebar's Labels section and the Ablaufdatum field a few
+      rows below, and clicking either did nothing, so the modal offered two
+      routes to each setting and one of them was dead. Every remaining pill is
+      the only way to reach what it opens.
+    -->
     <button class="pill-btn" type="button" onclick={() => (showAddChecklist = true)}>
       <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round">
         <rect x="2.5" y="2.5" width="11" height="11" rx="2" />
@@ -278,14 +299,20 @@
       <h3 class="legend">Ablaufdatum</h3>
     </div>
     <div class="due-row">
-      <input
-        class="due-input"
+      <button
+        class="due-pill"
         class:overdue
-        type="datetime-local"
+        type="button"
         aria-label="Ablaufdatum"
-        value={due}
-        onchange={onDueChange}
-      />
+        aria-haspopup="dialog"
+        onclick={() => (showDatePicker = true)}
+      >
+        <svg viewBox="0 0 16 16" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <circle cx="8" cy="8" r="6" />
+          <path d="M8 4.5v4l2.5 2.5" />
+        </svg>
+        {dueLabel ?? 'Datum hinzufügen'}
+      </button>
       {#if due}
         <button class="btn ghost" type="button" onclick={clearDue}>Entfernen</button>
       {/if}
@@ -302,6 +329,16 @@
       existingChecklists={checklists}
       onAdd={handleAddChecklist}
       onClose={() => (showAddChecklist = false)}
+    />
+  {/if}
+
+  {#if showDatePicker}
+    <DatePickerPopover
+      currentDate={dueDatePart}
+      currentTime={dueTimePart}
+      onSave={saveDue}
+      onRemove={clearDue}
+      onClose={() => (showDatePicker = false)}
     />
   {/if}
 </section>
@@ -500,13 +537,26 @@
     margin-left: 28px;
   }
 
-  .due-input {
+  .due-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
     padding: 6px 10px;
     background: #22272b;
     border: 1px solid #38414a;
     border-radius: 6px;
     color: #b6c2cf;
     font: inherit;
+    font-size: 13px;
+    cursor: pointer;
+  }
+
+  .due-pill:hover { background: #2c333a; color: #dee4ea; }
+
+  .due-pill.overdue {
+    background: #42221f;
+    border-color: #f87171;
+    color: #f87171;
   }
 
   .btn {

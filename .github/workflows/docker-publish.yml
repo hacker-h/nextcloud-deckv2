@@ -15,7 +15,58 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # Gate. Nothing is published until the unit suite and the hermetic browser
+  # suite both pass. The hermetic specs mock the backend in the browser, so they
+  # need no Nextcloud instance and no credentials, which is what makes them
+  # usable as a required check rather than an advisory one.
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    # Pinned to the same Playwright version as package.json. The image ships the
+    # exact browser builds that produced the committed -linux.png baselines;
+    # installing browsers ad hoc would drift and turn every visual test red.
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --user 1001
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Bundle security check
+        run: npm run test:security
+
+      - name: Hermetic browser tests (chromium, firefox, webkit)
+        run: npx playwright test --project=hermetic-chromium --project=hermetic-firefox --project=hermetic-webkit
+
+      # Traces, videos and the actual-vs-expected diff images for any failure.
+      # Without this a red visual test in CI is unreadable: the diff exists only
+      # inside the runner and is discarded when the job ends.
+      - name: Upload Playwright report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14
+
   build-and-push:
+    needs: test
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -58,3 +109,54 @@ jobs:
             BUILD_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  # Post-deploy verification against the real deployment. The entire suite above
+  # runs against localhost, so a green build proves the source tree is correct -
+  # not that the deployed artifact loads. Every bug in the QA audit was reported
+  # against the live host, so the live host is what gets checked here.
+  #
+  # Runs only after a real publish (never on pull_request, where nothing was
+  # pushed) and is allowed to fail the workflow without rolling anything back:
+  # it reports, it does not gate, because the image is already out by this point.
+  prod-smoke:
+    needs: build-and-push
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --user 1001
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # No separate wait step: the version-pinning test polls the deployment for
+      # the published sha itself. A shell-side curl grep could not do the same
+      # job anyway - the sha is a compile-time define that exists only in the JS
+      # bundle and the DOM it renders, never in the served HTML.
+      - name: Smoke test the deployment
+        run: npx playwright test --project=prod-smoke
+        env:
+          PROD_URL: https://deckv2.xhacker.de
+          RELEASE_SHA: ${{ github.sha }}
+
+      - name: Upload smoke report
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: prod-smoke-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 14

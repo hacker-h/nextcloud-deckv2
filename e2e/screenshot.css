@@ -1,0 +1,21 @@
+/* Injected into every toHaveScreenshot call (expect.toHaveScreenshot.stylePath).
+ *
+ * The build sha is a compile-time define rendered into the corner of the app,
+ * so it sits inside the bounding box of the .board and modal screenshots. Left
+ * visible it would change on every single commit, and the baselines would go
+ * red for a reason that has nothing to do with what they test. That is exactly
+ * how a visual suite earns a reputation for crying wolf and stops being read.
+ *
+ * Hidden rather than masked so it applies to all specs and all engines at once
+ * without threading a mask option through every assertion. visibility keeps the
+ * element in layout, so nothing around it reflows and the baseline still
+ * reflects real geometry.
+ */
+.version-tag,
+.build {
+  visibility: hidden !important;
+}
+
+/* Caret and animations are already handled by the config. Blinking or
+ * time-dependent affordances that are not part of what a baseline asserts
+ * belong here too. */

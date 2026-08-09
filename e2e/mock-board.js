@@ -49,7 +49,16 @@ export const MOCK_STACKS = [
     title: 'Essen',
     order: 0,
     cards: [
-      { id: 1001, title: 'Pizza Margherita', order: 0, description: 'Homemade dough', labels: [] },
+      {
+        id: 1001,
+        title: 'Pizza Margherita',
+        order: 0,
+        // Checklists live inside the description as markdown; the first card
+        // carries one so the progress bar and its transition are reachable
+        // without a spec having to create one first.
+        description: 'Homemade dough\n\n### Zubereitung\n- [x] Teig ansetzen\n- [ ] Belegen\n- [ ] Backen',
+        labels: [],
+      },
       {
         id: 1002,
         title: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
