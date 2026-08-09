@@ -8,6 +8,38 @@ import { assertOpaque } from './pixels.js';
 
 const LINK = 'https://example.com/dropped-link';
 const TROELLO_BLUE = [0, 87, 215];
+const NEUTRAL_TOAST = 'rgb(40, 46, 51)';
+const ERROR_TOAST = 'rgb(93, 31, 26)';
+
+async function expectBottomLeftToast(page, toast) {
+  await expect(toast).toBeVisible();
+
+  const layout = await toast.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const style = getComputedStyle(element);
+    return {
+      bottom: window.innerHeight - rect.bottom,
+      left: rect.left,
+      position: style.position,
+      transform: style.transform,
+    };
+  });
+
+  expect(layout.position).toBe('fixed');
+  expect(layout.left).toBeCloseTo(24, 0);
+  expect(layout.bottom).toBeCloseTo(24, 0);
+  expect(layout.transform).toBe('none');
+
+  const dock = page.locator('.dock');
+  await expect(dock).toHaveCount(1);
+  const [toastBox, dockBox] = await Promise.all([toast.boundingBox(), dock.boundingBox()]);
+  expect(toastBox).not.toBeNull();
+  expect(dockBox).not.toBeNull();
+  expect(
+    toastBox.x + toastBox.width <= dockBox.x || toastBox.x >= dockBox.x + dockBox.width,
+    'toast must not overlap the bottom navigation dock'
+  ).toBe(true);
+}
 
 test.describe('external drag onto board cards', () => {
   test('exactly one overlay exists at every point of a five-card traverse', async ({
@@ -94,8 +126,11 @@ test.describe('external drag onto board cards', () => {
       })
       .toBe(1);
 
-    await expect(page.locator('.toast.success')).toBeVisible();
-    await expect(page.locator('.toast.success')).toContainText('Erfolgreich');
+    const toast = page.locator('.toast.success');
+    await expectBottomLeftToast(page, toast);
+    await expect(toast).toContainText('Erfolgreich');
+    await expect(toast).toHaveCSS('background-color', NEUTRAL_TOAST);
+    await expect(page).toHaveScreenshot('tile-link-success-toast.png');
   });
 
   test('dropping a file fires the upload request', async ({ board, browserName }) => {
@@ -125,7 +160,9 @@ test.describe('external drag onto board cards', () => {
 
     await dragAcross(page, browserName, [point], { url: LINK, drop: true });
 
-    await expect(page.locator('.toast.error')).toBeVisible();
+    const toast = page.locator('.toast.error');
+    await expectBottomLeftToast(page, toast);
+    await expect(toast).toHaveCSS('background-color', ERROR_TOAST);
     await expect(page.locator('.toast.success')).toHaveCount(0);
   });
 

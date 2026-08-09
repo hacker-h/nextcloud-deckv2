@@ -20,6 +20,7 @@
   import CardComments from './CardComments.svelte';
   import CardAttachments from './CardAttachments.svelte';
   import CardLifecycleMenu from './CardLifecycleMenu.svelte';
+  import Toast from './Toast.svelte';
 
   let { currentUser, onSignOut = () => {}, onUnauthorized = () => {} } = $props();
 
@@ -321,14 +322,11 @@
     {/if}
 
     {#if tileToast}
-      <div class="toast {tileToast.status}" role="status">
-        {#if tileToast.status === 'uploading'}
-          <span class="toast-icon">ℹ</span>
-        {:else if tileToast.status === 'success'}
-          <span class="toast-icon">✓</span>
-        {/if}
-        <span>{tileToast.message}</span>
-      </div>
+      <Toast
+        status={tileToast.status}
+        message={tileToast.message}
+        onClose={() => (tileToast = null)}
+      />
     {/if}
 
     {#if selectedCount > 0}
@@ -420,8 +418,12 @@
     </CardDetailModal>
   {/if}
 
-  {#if board.state.toast}
-    <div class="toast">{board.state.toast.text}</div>
+  {#if board.state.toast && !tileToast}
+    <Toast
+      status="error"
+      message={board.state.toast.text}
+      onClose={() => (board.state.toast = null)}
+    />
   {/if}
 </div>
 
@@ -521,23 +523,6 @@
 
   .signout:hover { background: var(--card-bg-hover); color: var(--text); }
   .signout:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-  /* Failures surface here rather than blocking the board (PLAN.md §4.1). */
-  .toast {
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    z-index: 2000;
-    max-width: 520px;
-    padding: 10px 16px;
-    background: #5D1F1A;
-    border: 1px solid #A5342B;
-    border-radius: 8px;
-    color: #FFD5D2;
-    font-size: 13px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, .5);
-  }
 
   .state { display: flex; flex-direction: column; gap: 12px; align-items: flex-start; padding: 24px; }
   .err { margin: 0; color: var(--danger); }

@@ -61,6 +61,12 @@
     line-height: 18px;
   }
 
+  .toast.error {
+    background: #5d1f1a;
+    border-color: #a5342b;
+    color: #ffd5d2;
+  }
+
   .icon {
     display: flex;
     align-items: center;
