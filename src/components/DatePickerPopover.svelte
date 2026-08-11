@@ -1,10 +1,22 @@
 <script>
   let { currentDate = '', currentTime = '', onSave, onRemove, onClose } = $props();
 
-  let dateValue = $state(currentDate || new Date().toISOString().slice(0, 10));
+  function initialDate() {
+    return currentDate || new Date().toISOString().slice(0, 10);
+  }
+
+  function initialTime() {
+    return currentTime || '12:00';
+  }
+
+  function closeFromBackdrop(event) {
+    if (event.target === event.currentTarget) onClose?.();
+  }
+
+  let dateValue = $state(initialDate());
   // Reopening the picker on a card that already has a due time must show that
   // time, not reset it to noon and silently move the deadline on save.
-  let timeValue = $state(currentTime || '12:00');
+  let timeValue = $state(initialTime());
   let reminder = $state('Keine');
 
   function handleSave(e) {
@@ -13,11 +25,11 @@
   }
 </script>
 
-<div class="popover-backdrop" onclick={onClose} role="presentation">
+<div class="popover-backdrop" onclick={closeFromBackdrop} role="presentation">
   <div
     class="popover"
-    onclick={(e) => e.stopPropagation()}
     role="dialog"
+    tabindex="-1"
     aria-modal="true"
     aria-label="Fälligkeitsdatum ändern"
   >

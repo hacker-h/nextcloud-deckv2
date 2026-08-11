@@ -42,10 +42,13 @@ async function openTestBoard(page) {
   await expect(page.locator('[data-stack-id]').first()).toBeVisible({ timeout: 15_000 });
 }
 
-async function cardIdsIn(page, stackId) {
-  return page
-    .locator(`[data-stack-id="${stackId}"] [data-card-id]`)
-    .evaluateAll((els) => els.map((el) => Number(el.dataset.cardId)));
+async function cardIdsIn(page, stackId, minimum = 2) {
+  const cards = page.locator(`[data-stack-id="${stackId}"] [data-card-id]`);
+  // The first stack becomes visible before Svelte has necessarily committed
+  // every later lane. Reading immediately produced `undefined` ids and a
+  // misleading 30-second locator timeout instead of testing drag behaviour.
+  await expect.poll(() => cards.count(), { timeout: 15_000 }).toBeGreaterThanOrEqual(minimum);
+  return cards.evaluateAll((els) => els.map((el) => Number(el.dataset.cardId)));
 }
 
 async function center(locator) {

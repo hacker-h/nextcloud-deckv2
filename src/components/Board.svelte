@@ -13,6 +13,8 @@
 <div
   class="board"
   data-board
+  role="region"
+  aria-label="Kanban-Board"
   onpointerdown={(e) => e.target === e.currentTarget && onClearSelection?.()}
 >
   {#each stacks as stack (stack.id)}

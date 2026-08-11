@@ -1,7 +1,19 @@
 <script>
   let { title = 'Checkliste', onAdd, onClose, existingChecklists = [] } = $props();
 
-  let checklistTitle = $state(title);
+  function initialTitle() {
+    return title;
+  }
+
+  function focusOnMount(node) {
+    node.focus();
+  }
+
+  function closeFromBackdrop(event) {
+    if (event.target === event.currentTarget) onClose?.();
+  }
+
+  let checklistTitle = $state(initialTitle());
   let copyFrom = $state('(keine)');
 
   function handleSubmit(e) {
@@ -11,8 +23,8 @@
   }
 </script>
 
-<div class="popover-backdrop" onclick={onClose} role="presentation">
-  <div class="popover" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+<div class="popover-backdrop" onclick={closeFromBackdrop} role="presentation">
+  <div class="popover" role="dialog" tabindex="-1" aria-modal="true" aria-label="Checkliste hinzufügen">
     <div class="popover-header">
       <span class="popover-title">Checkliste hinzufügen</span>
       <button class="close-btn" onclick={onClose} aria-label="Schließen">✕</button>
@@ -26,7 +38,7 @@
         class="text-input"
         bind:value={checklistTitle}
         placeholder="Checkliste"
-        autofocus
+        use:focusOnMount
       />
 
       <label class="input-label" for="checklist-copy-select">Elemente kopieren aus...</label>

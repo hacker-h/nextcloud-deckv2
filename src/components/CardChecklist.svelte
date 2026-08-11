@@ -17,6 +17,14 @@
 
   let showDeleteConfirm = $state(false);
 
+  function focusOnMount(node) {
+    node.focus();
+  }
+
+  function closeDeleteFromBackdrop(event) {
+    if (event.target === event.currentTarget) showDeleteConfirm = false;
+  }
+
   // Popover state for existing items
   let activePopover = $state(null); // { type: 'assignee'|'date', itemId: string }
 
@@ -119,8 +127,8 @@
 
   <!-- Delete Confirm Popover -->
   {#if showDeleteConfirm}
-    <div class="popover-backdrop" onclick={() => (showDeleteConfirm = false)} role="presentation">
-      <div class="popover" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+    <div class="popover-backdrop" onclick={closeDeleteFromBackdrop} role="presentation">
+      <div class="popover" role="alertdialog" tabindex="-1" aria-modal="true" aria-label="Checkliste löschen">
         <div class="popover-header">
           <span class="popover-title">Checkliste löschen?</span>
           <button class="close-btn" onclick={() => (showDeleteConfirm = false)}>✕</button>
@@ -226,7 +234,7 @@
         class="composer-input"
         placeholder="Element hinzufügen"
         bind:value={newItemText}
-        autofocus
+        use:focusOnMount
       />
 
       <div class="composer-actions">

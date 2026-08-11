@@ -56,6 +56,12 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Static and accessibility checks
+        run: npm run check
+
+      - name: Dependency audit
+        run: npm run test:audit
+
       - name: Unit tests
         run: npm test
 

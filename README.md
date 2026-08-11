@@ -85,12 +85,32 @@ npm run dev
 # Run unit & component test suite (Vitest)
 npm test
 
+# Fail on Svelte diagnostics, including accessibility warnings
+npm run check
+
+# Fail on high-severity dependency vulnerabilities
+npm run test:audit
+
 # Run bundle security scan
 npm run test:security
 
 # Run end-to-end browser tests (Playwright)
 npm run test:e2e
 ```
+
+### Production release
+
+After the release commit is pushed to `origin/main`, one command verifies the
+successful GitHub Actions image publish, deploys that exact image on Alice,
+checks its immutable digest and revision label, and runs the production smoke
+suite:
+
+```bash
+npm run deploy:production
+```
+
+The command fails closed for a dirty worktree, an unpushed commit, a missing or
+failed publish run, a revision mismatch, or a failed production smoke test.
 
 ---
 

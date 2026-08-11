@@ -1,5 +1,10 @@
 <script>
   let { src, title = 'Bildvorschau', onClose } = $props();
+  let dialog;
+
+  $effect(() => {
+    dialog?.focus();
+  });
 
   function onKeydown(e) {
     if (e.key === 'Escape') {
@@ -15,15 +20,15 @@
   }
 </script>
 
-<svelte:window onkeydown={onKeydown} />
-
 <div
+  bind:this={dialog}
   class="backdrop"
   role="dialog"
   tabindex="-1"
   aria-modal="true"
   aria-label={title}
   onclick={handleBackdrop}
+  onkeydown={onKeydown}
 >
   <div class="container">
     <header class="bar">

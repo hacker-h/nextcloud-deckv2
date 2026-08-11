@@ -7,11 +7,14 @@
   "scripts": {
     "dev": "node scripts/dev.js",
     "dev:vite": "vite",
+    "deploy:production": "node scripts/deploy-production.js",
     "build": "vite build",
     "preview": "vite preview",
     "server": "node server/index.js",
     "start": "node server/index.js",
+    "check": "svelte-check --no-tsconfig --fail-on-warnings --ignore \"node_modules,dist,playwright-report,test-results\"",
     "test": "vitest run",
+    "test:audit": "npm audit --audit-level=high",
     "test:security": "npm run build && node scripts/check-bundle.js",
     "test:watch": "vitest",
     "test:e2e": "playwright test"
@@ -25,6 +28,8 @@
     "dotenv": "^16.6.1",
     "jsdom": "^25.0.1",
     "svelte": "^5.0.0",
+    "svelte-check": "^4.7.5",
+    "typescript": "^6.0.3",
     "vite": "^6.0.0",
     "vitest": "^3.2.7"
   }

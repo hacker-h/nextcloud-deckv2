@@ -22,6 +22,7 @@ const NC_URL = process.env.NC_URL ?? env.VITE_NC_URL;
 // no live Nextcloud, which is what lets them run in CI and on a fresh worktree.
 const HERMETIC = [
   'hermetic-smoke.spec.js',
+  'live-ui-contract.spec.js',
   'drag-external.spec.js',
   'drag-modal.spec.js',
   'visual-overlay.spec.js',

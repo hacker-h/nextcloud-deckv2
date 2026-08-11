@@ -2,6 +2,14 @@
   let { members = [], currentAssignee = null, onSelect, onClose } = $props();
   let searchQuery = $state('');
 
+  function focusOnMount(node) {
+    node.focus();
+  }
+
+  function closeFromBackdrop(event) {
+    if (event.target === event.currentTarget) onClose?.();
+  }
+
   let filteredMembers = $derived(
     members.filter((m) => {
       const q = searchQuery.toLowerCase();
@@ -13,8 +21,8 @@
   );
 </script>
 
-<div class="popover-backdrop" onclick={onClose} role="presentation">
-  <div class="popover" onclick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
+<div class="popover-backdrop" onclick={closeFromBackdrop} role="presentation">
+  <div class="popover" role="dialog" tabindex="-1" aria-modal="true" aria-label="Zuweisen">
     <div class="popover-header">
       <span class="popover-title">Zuweisen</span>
       <button class="close-btn" onclick={onClose} aria-label="Schließen">✕</button>
@@ -26,7 +34,7 @@
         class="search-input"
         placeholder="Nach Benutzern suchen"
         bind:value={searchQuery}
-        autofocus
+        use:focusOnMount
       />
 
       <div class="section-title">Board-Mitglieder</div>
