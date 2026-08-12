@@ -20,6 +20,10 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
 
+concurrency:
+  group: deckv2-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   # Gate. Nothing is published until the unit suite and the hermetic browser
   # suite both pass. The hermetic specs mock the backend in the browser, so they
@@ -27,6 +31,7 @@ jobs:
   # usable as a required check rather than an advisory one.
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 25
     permissions:
       contents: read
     # Pinned to the same Playwright version as package.json. The image ships the
@@ -84,8 +89,31 @@ jobs:
             test-results/
           retention-days: 14
 
+  container-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build and health-check production image
+        run: |
+          docker build --build-arg BUILD_SHA=${{ github.sha }} -t deckv2:smoke .
+          container=$(docker run -d -P -e NC_URL=https://nextcloud.invalid -e SESSION_SECRET=container-smoke-secret deckv2:smoke)
+          trap 'docker logs "$container"; docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+          for attempt in $(seq 1 60); do
+            if [ "$(docker inspect --format='{{.State.Health.Status}}' "$container")" = healthy ]; then
+              curl --fail --silent "http://127.0.0.1:$(docker port "$container" 3000/tcp | head -n 1 | sed 's/.*://')/healthz" >/dev/null
+              exit 0
+            fi
+            sleep 1
+          done
+          exit 1
+
   build-and-push:
-    needs: test
+    needs: [test, container-smoke]
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -126,6 +154,8 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           build-args: |
             BUILD_SHA=${{ github.sha }}
+          sbom: true
+          provenance: mode=max
           cache-from: type=gha
           cache-to: type=gha,mode=max
 

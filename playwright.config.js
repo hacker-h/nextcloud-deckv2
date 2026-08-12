@@ -27,6 +27,7 @@ const HERMETIC = [
   'drag-modal.spec.js',
   'visual-overlay.spec.js',
   'motion.spec.js',
+  'planner.spec.js',
 ];
 
 // Specs that mutate a real Deck board. Skipped entirely when no credentials are

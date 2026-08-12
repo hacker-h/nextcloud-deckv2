@@ -59,6 +59,9 @@ export class MockBackend {
     // Set by a spec to make the next matching request fail, so error paths are
     // reachable without a broken server.
     this.failNext = null;
+    this.calendarEnabled = false;
+    this.calendarEvents = [];
+    this.calendarMappings = [];
   }
 
   record(method, url, body) {
@@ -95,6 +98,46 @@ export async function installMockBackend(page, { backend = new MockBackend() } =
   );
   await page.route('**/auth/poll', (route) => json(route, { user: MOCK_USER }));
   await page.route('**/auth/logout', (route) => json(route, {}));
+
+  await page.route('**/integration/proton-calendar/**', async (route, request) => {
+    const url = new URL(request.url());
+    const method = request.method();
+    const raw = request.postData();
+    const body = raw ? JSON.parse(raw) : null;
+    backend.record(method, request.url(), body);
+
+    if (url.pathname.endsWith('/status')) {
+      return json(route, { enabled: backend.calendarEnabled, connected: backend.calendarEnabled, status: backend.calendarEnabled ? 'access_valid' : 'disabled' });
+    }
+    if (!backend.calendarEnabled) return json(route, { error: { code: 'CALENDAR_INTEGRATION_DISABLED', message: 'Not configured' } }, 503);
+    if (url.pathname.endsWith('/calendars')) {
+      return json(route, { calendars: [{ id: 'calendar-1', name: 'Deck QA', default: true }], defaultCalendarId: 'calendar-1' });
+    }
+    if (url.pathname.endsWith('/planner')) {
+      return json(route, { events: backend.calendarEvents, mappings: backend.calendarMappings });
+    }
+    if (url.pathname.endsWith('/sync')) {
+      return json(route, { created: [], updated: [], pulled: [], removed: [], conflicts: [], errors: [] });
+    }
+    if (url.pathname.endsWith('/schedule')) {
+      const entry = body.entry;
+      const event = {
+        id: `calendar-event-${backend.calendarEvents.length + 1}`,
+        calendarId: body.calendarId ?? 'calendar-1',
+        title: entry.title,
+        start: entry.dueAt,
+        end: entry.dueAt,
+        allDay: entry.kind === 'checklist',
+        recurrence: body.recurrence,
+        isRecurring: Boolean(body.recurrence),
+      };
+      backend.calendarEvents.push(event);
+      const mapping = { entryKey: entry.kind === 'checklist' ? `checklist:${entry.boardId}:${entry.cardId}:${entry.itemId}` : `card:${entry.boardId}:${entry.cardId}`, eventId: event.id };
+      backend.calendarMappings.push(mapping);
+      return json(route, { event, mapping });
+    }
+    return json(route, { error: { code: 'NOT_FOUND', message: 'Mock route not found' } }, 404);
+  });
 
   await page.route('**/api/deck/**', async (route, request) => {
     const url = new URL(request.url());

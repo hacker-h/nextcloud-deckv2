@@ -9,6 +9,7 @@
   import { applyCardClick, applyShiftClick, emptySelection, orderedSelection } from '../lib/selection.js';
   import { createInboxStore } from '../lib/inbox.svelte.js';
   import { withoutInbox, readCollapsed, writeCollapsed } from '../lib/inbox.js';
+  import { CalendarClient, applyCalendarPulls, calendarEntries } from '../lib/calendar.js';
   import Board from './Board.svelte';
   import InboxPanel from './InboxPanel.svelte';
   import BoardSwitcher from './BoardSwitcher.svelte';
@@ -21,14 +22,18 @@
   import CardAttachments from './CardAttachments.svelte';
   import CardLifecycleMenu from './CardLifecycleMenu.svelte';
   import Toast from './Toast.svelte';
+  import Planner from './Planner.svelte';
 
   let { currentUser, onSignOut = () => {}, onUnauthorized = () => {} } = $props();
 
   const client = new DeckClient({ onUnauthorized: () => onUnauthorized() });
+  const calendar = new CalendarClient({ onUnauthorized: () => onUnauthorized() });
 
   const board = createBoardStore(client);
 
   let tileToast = $state(null);
+  let activeView = $state('board');
+  let calendarReady = $state(false);
 
   // Only the attachment call itself may decide success or failure. An earlier
   // version awaited the board refresh inside the same try, so anything that
@@ -205,6 +210,37 @@
     }
   }
 
+  function handlePlannerOpen({ card }) {
+    detail.open({ boardId: current.id, stackId: card.stackId, cardId: card.id });
+  }
+
+  async function syncBoardDates() {
+    if (!calendarReady || !current) return null;
+    const result = await calendar.sync(calendarEntries(stacks, current.id), {
+      autoCreate: true,
+      scopeBoardIds: [String(current.id)],
+      pruneMissing: true,
+    });
+    if (result.pulled?.length) await applyCalendarPulls(client, stacks, result.pulled, (card) => board.replaceCard(card));
+    if (result.conflicts?.length) {
+      tileToast = { status: 'error', message: `${result.conflicts.length} Kalenderkonflikt${result.conflicts.length === 1 ? '' : 'e'} im Planer` };
+    }
+    return result;
+  }
+
+  async function saveDetailCore(changes) {
+    detail.editDraft(changes);
+    const saved = await detail.saveCore();
+    if (saved && ['title', 'duedate', 'description'].some((key) => Object.hasOwn(changes, key))) {
+      try {
+        await syncBoardDates();
+      } catch (caught) {
+        tileToast = { status: 'error', message: `Deck gespeichert; Kalender-Sync ausstehend: ${caught?.message ?? 'Fehler'}` };
+      }
+    }
+    return saved;
+  }
+
   async function loadAssignmentOptions(boardId) {
     try {
       const { data } = await getBoardAssignmentOptions(client, boardId);
@@ -241,6 +277,13 @@
       const list = await loadBoards();
       const preferred = list.find((b) => b.id === preferredBoardId);
       await openBoard(preferred ?? list[0]);
+      try {
+        const calendarStatus = await calendar.status();
+        calendarReady = Boolean(calendarStatus.enabled && calendarStatus.connected);
+        if (calendarReady) await syncBoardDates();
+      } catch {
+        calendarReady = false;
+      }
     } catch (e) {
       board.state.error = e.message;
       board.state.loading = false;
@@ -305,6 +348,15 @@
           </div>
         {/each}
       </div>
+    {:else if activeView === 'planner'}
+      <Planner
+        {calendar}
+        deckClient={client}
+        board={current}
+        {stacks}
+        onCard={(card) => board.replaceCard(card)}
+        onOpenCard={handlePlannerOpen}
+      />
     {:else}
       <Board
         {stacks}
@@ -350,9 +402,12 @@
     {/if}
 
     <BottomNav
+      {activeView}
       inboxOpen={!inboxCollapsed}
       {switcherOpen}
       onInbox={toggleInbox}
+      onPlanner={() => (activeView = 'planner')}
+      onBoard={() => (activeView = 'board')}
       onSwitchBoards={() => (switcherOpen = !switcherOpen)}
     />
   </div>
@@ -375,10 +430,7 @@
           card={detail.state.card}
           error={detail.state.actionScope === 'core' ? detail.state.actionError : null}
           onDraftChange={detail.setDraftPending}
-          onSave={(changes) => {
-            detail.editDraft(changes);
-            return detail.saveCore();
-          }}
+          onSave={saveDetailCore}
         />
         <CardComments
           comments={detail.state.comments}
