@@ -1,0 +1,33 @@
+image: mcr.microsoft.com/playwright:v1.62.1-noble
+
+stages:
+  - test
+
+variables:
+  npm_config_cache: .npm-cache
+  BUILD_SHA: $CI_COMMIT_SHA
+
+cache:
+  key:
+    files:
+      - package-lock.json
+  paths:
+    - .npm-cache/
+
+test:full:
+  stage: test
+  timeout: 25m
+  before_script:
+    - npm ci
+  script:
+    - npm run check
+    - npm run test:audit
+    - npm test
+    - npm run test:security
+    - npx playwright test --project=hermetic-chromium --project=hermetic-firefox --project=hermetic-webkit
+  artifacts:
+    when: always
+    expire_in: 14 days
+    paths:
+      - playwright-report/
+      - test-results/
