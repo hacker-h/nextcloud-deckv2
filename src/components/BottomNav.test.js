@@ -20,13 +20,15 @@ describe('BottomNav', () => {
     expect(tab('Board')).toHaveAttribute('aria-pressed', 'true');
   });
 
-  it('keeps the board tab inert because the board is always mounted behind it', async () => {
-    const { container } = render(BottomNav, { props: {} });
+  it('switches back to the board view', async () => {
+    const onBoard = vi.fn();
+    const { container } = render(BottomNav, { props: { activeView: 'planner', onBoard } });
     const board = tab('Board');
 
     await userEvent.click(board);
 
-    expect(board).toHaveAttribute('aria-pressed', 'true');
+    expect(onBoard).toHaveBeenCalledOnce();
+    expect(board).toHaveAttribute('aria-pressed', 'false');
     expect(container.querySelectorAll('.tab.active')).toHaveLength(1);
   });
 
@@ -62,9 +64,15 @@ describe('BottomNav', () => {
     expect(tab('Boards wechseln')).toHaveAttribute('aria-expanded', 'true');
   });
 
-  it('keeps the planner inert until calendar sync exists', async () => {
-    render(BottomNav, { props: {} });
+  it('opens and marks the Proton-backed Planner view', async () => {
+    const onPlanner = vi.fn();
+    const { rerender } = render(BottomNav, { props: { onPlanner } });
 
-    expect(tab('Planer')).toBeDisabled();
+    await userEvent.click(tab('Planer'));
+    expect(onPlanner).toHaveBeenCalledOnce();
+
+    rerender({ activeView: 'planner', onPlanner });
+    expect(tab('Planer')).toHaveAttribute('aria-pressed', 'true');
+    expect(tab('Board')).toHaveAttribute('aria-pressed', 'false');
   });
 });
