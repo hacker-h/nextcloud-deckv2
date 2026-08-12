@@ -18,7 +18,7 @@ export function parseChecklists(description = '') {
     const headerMatch = line.match(/^#{2,4}\s+(.+)$/);
     if (headerMatch && !line.match(/^#{2,4}\s+\[/)) {
       currentChecklist = {
-        id: 'cl_' + (checklists.length + 1) + '_' + Math.random().toString(36).slice(2, 7),
+        id: stableId('cl', checklists.length, headerMatch[1].trim()),
         title: headerMatch[1].trim(),
         items: []
       };
@@ -31,7 +31,7 @@ export function parseChecklists(description = '') {
     if (itemMatch) {
       if (!currentChecklist) {
         currentChecklist = {
-          id: 'cl_1_' + Math.random().toString(36).slice(2, 7),
+          id: stableId('cl', checklists.length, 'Checkliste'),
           title: 'Checkliste',
           items: []
         };
@@ -44,6 +44,7 @@ export function parseChecklists(description = '') {
       // Extract metadata like <!-- @username {due:YYYY-MM-DD} --> or @username {due:YYYY-MM-DD}
       let assignee = null;
       let duedate = null;
+      let itemId = null;
 
       // HTML comment metadata
       const commentMatch = rawText.match(/<!--\s*(.*?)\s*-->/);
@@ -52,8 +53,11 @@ export function parseChecklists(description = '') {
         const userM = metaStr.match(/@([\w.-]+)/);
         if (userM) assignee = userM[1];
 
-        const dueM = metaStr.match(/due:([\d{4}-]+)/);
+        const dueM = metaStr.match(/\bdue:(\d{4}-\d{2}-\d{2})\b/);
         if (dueM) duedate = dueM[1];
+
+        const idM = metaStr.match(/\bid:([\w.-]+)\b/);
+        if (idM) itemId = idM[1];
 
         rawText = rawText.replace(/<!--\s*.*?\s*-->/, '').trim();
       } else {
@@ -71,7 +75,7 @@ export function parseChecklists(description = '') {
       }
 
       currentChecklist.items.push({
-        id: 'item_' + currentChecklist.items.length + '_' + Math.random().toString(36).slice(2, 7),
+        id: itemId ?? stableId('item', checklists.length - 1, currentChecklist.items.length, rawText),
         text: rawText,
         done,
         assignee,
@@ -114,6 +118,7 @@ export function serializeChecklists(descriptionText = '', checklists = []) {
       let line = `- [${mark}] ${item.text.trim()}`;
 
       const meta = [];
+      if (item.id) meta.push(`id:${item.id}`);
       if (item.assignee) meta.push(`@${item.assignee}`);
       if (item.duedate) meta.push(`due:${item.duedate}`);
 
@@ -141,4 +146,14 @@ export function getChecklistSummary(description = '') {
   }
 
   return { total, done };
+}
+
+function stableId(prefix, ...parts) {
+  const input = parts.join('\u0000');
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `${prefix}_${(hash >>> 0).toString(36)}`;
 }

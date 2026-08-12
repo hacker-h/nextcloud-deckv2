@@ -17,7 +17,8 @@
     "test:audit": "npm audit --audit-level=high",
     "test:security": "npm run build && node scripts/check-bundle.js",
     "test:watch": "vitest",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:proton:live": "node scripts/live-proton-integration.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

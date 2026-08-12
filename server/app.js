@@ -3,6 +3,7 @@ import { createReadStream } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { clearFlowCookie, clearSessionCookie, flowCookie, parseCookies, requestIsHttps, sessionCookie } from './cookies.js';
+import { handleCalendarRoute, isCalendarRoute } from './calendar-routes.js';
 
 const HOP_BY_HOP = new Set(['connection', 'content-length', 'host', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade']);
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -20,13 +21,17 @@ const STATIC_TYPES = new Map([
   ['.map', 'application/json; charset=utf-8'],
 ]);
 
-export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now(), distDir = null, flowLimits = DEFAULT_FLOW_LIMITS } = {}) {
+export function createApp({ ncUrl, sessions, nextcloud, calendarIntegration = null, now = () => Date.now(), distDir = null, flowLimits = DEFAULT_FLOW_LIMITS } = {}) {
   const flows = new Map();
   const nc = nextcloud;
 
   return async function app(req, res) {
     try {
       const url = requestUrl(req);
+      if (req.method === 'GET' && url.pathname === '/healthz') {
+        res.setHeader('Cache-Control', 'no-store');
+        return send(res, 200, { status: 'ok' });
+      }
       if (req.method === 'POST' && url.pathname === '/auth/login') {
         if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
         return await authLogin(req, res, nc, flows, now, flowLimits);
@@ -38,6 +43,14 @@ export function createApp({ ncUrl, sessions, nextcloud, now = () => Date.now(), 
       }
       if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, ncUrl, sessions);
       if (url.pathname === '/auth' || url.pathname.startsWith('/auth/')) return send(res, 404, { error: 'not found' });
+      if (isCalendarRoute(url.pathname)) {
+        const session = sessionFrom(req, sessions);
+        if (session?.invalid) return send(res, 400, { error: 'invalid cookie' });
+        if (!session) return send(res, 401, { error: 'unauthenticated' });
+        if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
+        sessions.touch(session.sid);
+        return await handleCalendarRoute({ req, res, url, user: session.user, integration: calendarIntegration });
+      }
       if (url.pathname.startsWith('/api/')) return await proxy(req, res, url, ncUrl, sessions);
       if (['GET', 'HEAD'].includes(req.method)) return await serveStatic(req, res, url, distDir);
       return send(res, 404, { error: 'not found' });

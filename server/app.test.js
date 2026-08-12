@@ -41,8 +41,8 @@ async function upstream(handler) {
   });
 }
 
-async function appUrl({ nextcloud, sessions, client, now, distDir, flowLimits } = {}) {
-  const handler = createApp({ ncUrl: nextcloud, sessions, nextcloud: client, now, distDir, flowLimits });
+async function appUrl({ nextcloud, sessions, client, calendarIntegration, now, distDir, flowLimits } = {}) {
+  const handler = createApp({ ncUrl: nextcloud, sessions, nextcloud: client, calendarIntegration, now, distDir, flowLimits });
   return listen(handler);
 }
 
@@ -387,6 +387,16 @@ describe('authenticated proxy and guards', () => {
 });
 
 describe('static client serving', () => {
+  it('exposes a credential-free container health endpoint', async () => {
+    const base = await appUrl({ distDir: fixtureDist() });
+
+    const res = await fetch(`${base}/healthz`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    await expect(res.json()).resolves.toEqual({ status: 'ok' });
+  });
+
   it('serves index.html at / with no-cache', async () => {
     const base = await appUrl({ distDir: fixtureDist() });
 
@@ -486,5 +496,85 @@ describe('static client serving', () => {
     const res = await fetch(`${base}/`);
 
     expect(res.status).toBe(404);
+  });
+});
+
+describe('Proton Calendar integration routes', () => {
+  function authenticated(sessions, user = 'alice') {
+    return `sid=${sessions.create('nextcloud-app-password', user)}`;
+  }
+
+  it('requires a valid Nextcloud session and reports disabled state safely', async () => {
+    const sessions = makeSessions();
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions });
+
+    const denied = await fetch(`${base}/integration/proton-calendar/status`);
+    expect(denied.status).toBe(401);
+
+    const status = await fetch(`${base}/integration/proton-calendar/status`, { headers: { cookie: authenticated(sessions) } });
+    expect(status.status).toBe(200);
+    expect(status.headers.get('cache-control')).toBe('no-store');
+    await expect(status.json()).resolves.toEqual({ enabled: false, connected: false });
+  });
+
+  it('routes Planner and sync calls without exposing server credentials', async () => {
+    const sessions = makeSessions();
+    const calendarIntegration = {
+      status: vi.fn().mockResolvedValue({ enabled: true, connected: true, mappings: 2 }),
+      planner: vi.fn().mockResolvedValue({ events: [{ id: 'event-1', title: 'Ship' }], mappings: [] }),
+      sync: vi.fn().mockResolvedValue({ created: [], updated: [], pulled: [], conflicts: [], errors: [] }),
+    };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions, calendarIntegration });
+    const cookie = authenticated(sessions);
+
+    const status = await fetch(`${base}/integration/proton-calendar/status`, { headers: { cookie } });
+    expect(JSON.stringify(await status.json())).not.toMatch(/token|password|secret/i);
+
+    const planner = await fetch(`${base}/integration/proton-calendar/planner?start=2026-08-01T00:00:00Z&end=2026-08-08T00:00:00Z`, { headers: { cookie } });
+    await expect(planner.json()).resolves.toMatchObject({ events: [{ id: 'event-1' }] });
+    expect(calendarIntegration.planner).toHaveBeenCalledWith('alice', expect.objectContaining({ start: '2026-08-01T00:00:00Z' }));
+
+    const sync = await fetch(`${base}/integration/proton-calendar/sync`, {
+      method: 'POST',
+      headers: { cookie, Origin: base, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries: [{ kind: 'card', cardId: 42 }] }),
+    });
+    expect(sync.status).toBe(200);
+    expect(calendarIntegration.sync).toHaveBeenCalledWith('alice', [{ kind: 'card', cardId: 42 }], expect.any(Object));
+  });
+
+  it('enforces same-origin writes and JSON request bodies', async () => {
+    const sessions = makeSessions();
+    const calendarIntegration = { sync: vi.fn() };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions, calendarIntegration });
+    const cookie = authenticated(sessions);
+
+    const crossSite = await fetch(`${base}/integration/proton-calendar/sync`, {
+      method: 'POST',
+      headers: { cookie, Origin: 'https://evil.test', 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    expect(crossSite.status).toBe(403);
+    expect(calendarIntegration.sync).not.toHaveBeenCalled();
+
+    const wrongType = await fetch(`${base}/integration/proton-calendar/sync`, {
+      method: 'POST',
+      headers: { cookie, Origin: base, 'Content-Type': 'text/plain' },
+      body: '{}',
+    });
+    expect(wrongType.status).toBe(415);
+    await expect(wrongType.json()).resolves.toMatchObject({ error: { code: 'UNSUPPORTED_MEDIA_TYPE' } });
+  });
+
+  it('redacts credential-shaped upstream messages', async () => {
+    const sessions = makeSessions();
+    const calendarIntegration = {
+      status: vi.fn().mockRejectedValue(Object.assign(new Error('Bearer live-secret-value expired'), { status: 401, code: 'AUTH_EXPIRED' })),
+    };
+    const base = await appUrl({ nextcloud: 'https://nc.test', sessions, calendarIntegration });
+    const response = await fetch(`${base}/integration/proton-calendar/status`, { headers: { cookie: authenticated(sessions) } });
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({ error: { code: 'AUTH_EXPIRED', message: 'Bearer [REDACTED] expired' } });
   });
 });

@@ -19,6 +19,7 @@ export function loadConfig(env = process.env, log = console) {
   if (!Number.isInteger(port) || port <= 0 || port > 65535) throw new Error('PORT must be a valid TCP port');
 
   const sessionFile = env.SESSION_FILE || '.data/sessions.json';
+  const calendar = calendarConfig(env);
   let sessionSecret;
   let sessionSecretIsEphemeral = false;
   if (env.SESSION_SECRET) {
@@ -38,5 +39,45 @@ export function loadConfig(env = process.env, log = console) {
     sessionSecret,
     sessionSecretIsEphemeral,
     sessionFile,
+    calendar,
+  };
+}
+
+function calendarConfig(env) {
+  const baseUrl = String(env.PROTON_CALENDAR_API_URL ?? '').trim();
+  // These aliases are emitted by proton-calendar-cli. Both containers can
+  // therefore consume one owner-only env file without duplicating its token.
+  const explicitToken = String(env.PROTON_CALENDAR_API_TOKEN ?? '').trim();
+  const token = explicitToken || (baseUrl ? String(env.API_BEARER_TOKEN ?? '').trim() : '');
+  if (!baseUrl && !token) return { enabled: false };
+  if (!baseUrl || !token) throw new Error('PROTON_CALENDAR_API_URL and PROTON_CALENDAR_API_TOKEN must be configured together');
+
+  let parsed;
+  try {
+    parsed = new URL(baseUrl);
+  } catch {
+    throw new Error('PROTON_CALENDAR_API_URL must be a well-formed absolute http(s) URL');
+  }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('PROTON_CALENDAR_API_URL must be an absolute http(s) URL');
+  parsed.pathname = parsed.pathname.replace(/\/+$/, '');
+
+  const allowedUsers = String(env.PROTON_CALENDAR_DECK_USERS ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean);
+  if (!allowedUsers.length) throw new Error('PROTON_CALENDAR_DECK_USERS is required when Proton Calendar integration is enabled');
+
+  const timeoutMs = env.PROTON_CALENDAR_TIMEOUT_MS ? Number(env.PROTON_CALENDAR_TIMEOUT_MS) : 20_000;
+  if (!Number.isInteger(timeoutMs) || timeoutMs < 1000 || timeoutMs > 120_000) throw new Error('PROTON_CALENDAR_TIMEOUT_MS must be between 1000 and 120000');
+
+  return {
+    enabled: true,
+    baseUrl: parsed.toString().replace(/\/$/, ''),
+    token,
+    calendarId: String(env.PROTON_CALENDAR_ID ?? env.TARGET_CALENDAR_ID ?? env.DEFAULT_CALENDAR_ID ?? '').trim() || null,
+    allowedUsers,
+    timezone: String(env.PROTON_CALENDAR_TIMEZONE ?? 'Europe/Berlin').trim(),
+    mappingFile: String(env.CALENDAR_SYNC_FILE ?? '.data/calendar-sync.json'),
+    timeoutMs,
   };
 }

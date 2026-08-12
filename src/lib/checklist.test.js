@@ -40,6 +40,17 @@ describe('checklist markdown parser & serializer', () => {
     expect(items[1].duedate).toBe('2026-08-20');
   });
 
+  it('keeps checklist item ids stable and persists explicit ids', () => {
+    const legacy = `### Checkliste\n- [ ] Stable item <!-- due:2026-08-26 -->`;
+    const first = parseChecklists(legacy).checklists[0].items[0];
+    const second = parseChecklists(legacy).checklists[0].items[0];
+    expect(first.id).toBe(second.id);
+
+    const serialized = serializeChecklists('', [{ title: 'Checkliste', items: [first] }]);
+    expect(serialized).toContain(`id:${first.id}`);
+    expect(parseChecklists(serialized).checklists[0].items[0].id).toBe(first.id);
+  });
+
   it('serializes checklists back to clean markdown', () => {
     const checklists = [
       {
