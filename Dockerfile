@@ -12,6 +12,7 @@ WORKDIR /app
 ENV NODE_ENV=production
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/server ./server
+COPY --from=build /app/shared ./shared
 COPY --from=build /app/package.json ./
 RUN mkdir -p /app/.data && chown -R node:node /app/.data
 USER node

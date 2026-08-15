@@ -5,7 +5,7 @@
 // never a spinner on the board. Measured server cost is ~1.2-1.5s per move, so
 // anything that waits for the response feels broken.
 
-import { ORDER_STEP, planOrders } from './ordering.js';
+import { ORDER_STEP, planOrders } from '../../shared/ordering.js';
 
 export function createBoardStore(client) {
   const s = $state({

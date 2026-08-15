@@ -1,11 +1,10 @@
 import { boardAllowed, hasScope, SCOPES } from './agent-tokens.js';
-import { planOrders } from '../src/lib/ordering.js';
-import { INBOX_STACK_TITLE, INBOX_TITLE } from '../src/lib/inbox.js';
+import { planOrders } from '../shared/ordering.js';
+import { INBOX_COLOR, INBOX_STACK_TITLE, INBOX_TITLE } from '../shared/inbox-board.js';
 
 const PREFIX = '/agent';
 const MAX_BODY_BYTES = 1024 * 1024;
 const MAX_BULK_CARDS = 200;
-const INBOX_COLOR = '31CC7C';
 const MOVE_CONCURRENCY = 6;
 
 export function isAgentRoute(pathname) {
