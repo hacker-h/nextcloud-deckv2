@@ -40,6 +40,21 @@ export function loadConfig(env = process.env, log = console) {
     sessionSecretIsEphemeral,
     sessionFile,
     calendar,
+    agent: agentConfig(env),
+  };
+}
+
+function agentConfig(env) {
+  const enabled = String(env.AGENT_API_ENABLED ?? '').trim().toLowerCase() === 'true';
+  if (!enabled) return { enabled: false };
+
+  const rateMax = env.AGENT_API_RATE_MAX ? Number(env.AGENT_API_RATE_MAX) : 120;
+  if (!Number.isInteger(rateMax) || rateMax < 1 || rateMax > 10_000) throw new Error('AGENT_API_RATE_MAX must be between 1 and 10000');
+
+  return {
+    enabled: true,
+    tokenFile: String(env.AGENT_TOKEN_FILE ?? '.data/agent-tokens.json'),
+    rate: { windowMs: 60_000, max: rateMax },
   };
 }
 

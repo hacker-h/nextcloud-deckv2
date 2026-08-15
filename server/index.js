@@ -10,6 +10,7 @@ import { SessionStore } from './sessions.js';
 import { CalendarIntegration } from './calendar-integration.js';
 import { CalendarMappingStore } from './calendar-mappings.js';
 import { ProtonCalendarApi } from './proton-calendar.js';
+import { AgentTokenStore } from './agent-tokens.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const distDir = resolve(root, 'dist');
@@ -29,8 +30,17 @@ const calendarIntegration = config.calendar.enabled
     timezone: config.calendar.timezone,
   })
   : null;
+const agentTokens = config.agent.enabled ? new AgentTokenStore({ filePath: config.agent.tokenFile }) : null;
 if (!existsSync(distDir)) console.warn(`WARNING: built client directory is missing at ${distDir}; run npm run build before production start.`);
-const app = createApp({ ncUrl: config.ncUrl, sessions, nextcloud, calendarIntegration, distDir });
+const app = createApp({
+  ncUrl: config.ncUrl,
+  sessions,
+  nextcloud,
+  calendarIntegration,
+  agentTokens,
+  agentRate: config.agent.enabled ? config.agent.rate : undefined,
+  distDir,
+});
 
 // A single unhandled rejection must never take the whole server down: that
 // would turn any upstream Nextcloud hiccup into an unauthenticated DoS.

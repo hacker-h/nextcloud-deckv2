@@ -5,7 +5,7 @@
 // never a spinner on the board. Measured server cost is ~1.2-1.5s per move, so
 // anything that waits for the response feels broken.
 
-import { ORDER_STEP } from './deck.js';
+import { ORDER_STEP, planOrders } from './ordering.js';
 
 export function createBoardStore(client) {
   const s = $state({
@@ -127,45 +127,11 @@ export function createBoardStore(client) {
     dest.cards.splice(at, 0, ...moving);
     moving.forEach((c) => (c.stackId = toStackId));
 
-    // --- assign orders (M0.4) ---
-    // Every card whose `order` changes must be persisted, not just the ones the
-    // user dragged: a re-space shifts its neighbours too, and skipping them
-    // leaves the server sorting the card somewhere else than the UI shows it
-    // (verified - the card landed last instead of second).
-    const before = dest.cards[at - 1] ?? null;
-    const after = dest.cards[at + moving.length] ?? null;
-    const dirty = [];
-
-    const lo = before
-      ? Number(before.order)
-      : after
-        ? Number(after.order) - ORDER_STEP * (moving.length + 1)
-        : 0;
-    const hi = after ? Number(after.order) : lo + ORDER_STEP * (moving.length + 1);
-    const room = hi - lo;
-
-    if (room > moving.length + 1) {
-      // Enough headroom to bisect: only the moved cards change.
-      const step = Math.floor(room / (moving.length + 1));
-      moving.forEach((c, i) => {
-        c.order = lo + step * (i + 1);
-        dirty.push(c);
-      });
-    } else {
-      // Gap exhausted. Deck stores dense orders (0,1,2,...), so this is the
-      // normal case for an insert between two neighbours, not an edge case.
-      // Re-space forwards from the insertion point and stop as soon as the
-      // remaining tail is already ordered correctly - that keeps this O(few)
-      // instead of rewriting the whole stack the way reorder() does.
-      let prev = lo;
-      for (let i = at; i < dest.cards.length; i++) {
-        const c = dest.cards[i];
-        if (!cardIds.includes(c.id) && Number(c.order) > prev) break;
-        c.order = prev + ORDER_STEP;
-        prev = c.order;
-        dirty.push(c);
-      }
-    }
+    // --- assign orders (M0.4, see ordering.js) ---
+    const dirty = planOrders({ cards: dest.cards, at, movingCount: moving.length }).map(({ card, order }) => {
+      card.order = order;
+      return card;
+    });
 
     // --- send in background, bounded parallelism (M0.3: 6 parallel = 4.3s) ---
     s.pending += dirty.length;

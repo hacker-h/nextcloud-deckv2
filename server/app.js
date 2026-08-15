@@ -4,11 +4,15 @@ import { realpath, stat } from 'node:fs/promises';
 import { extname, resolve, sep } from 'node:path';
 import { clearFlowCookie, clearSessionCookie, flowCookie, parseCookies, requestIsHttps, sessionCookie } from './cookies.js';
 import { handleCalendarRoute, isCalendarRoute } from './calendar-routes.js';
+import { handleAgentRoute, isAgentRoute } from './agent-routes.js';
+import { handleAgentAdminRoute, isAgentAdminRoute } from './agent-admin.js';
+import { AgentDeckClient } from './agent-deck.js';
 
 const HOP_BY_HOP = new Set(['connection', 'content-length', 'host', 'keep-alive', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'transfer-encoding', 'upgrade']);
 const MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 const FLOW_TTL_MS = 20 * 60 * 1000;
 const DEFAULT_FLOW_LIMITS = { global: 256, perIp: 16 };
+const DEFAULT_AGENT_RATE = { windowMs: 60_000, max: 120 };
 const STATIC_TYPES = new Map([
   ['.html', 'text/html; charset=utf-8'],
   ['.js', 'text/javascript; charset=utf-8'],
@@ -21,9 +25,10 @@ const STATIC_TYPES = new Map([
   ['.map', 'application/json; charset=utf-8'],
 ]);
 
-export function createApp({ ncUrl, sessions, nextcloud, calendarIntegration = null, now = () => Date.now(), distDir = null, flowLimits = DEFAULT_FLOW_LIMITS } = {}) {
+export function createApp({ ncUrl, sessions, nextcloud, calendarIntegration = null, agentTokens = null, now = () => Date.now(), distDir = null, flowLimits = DEFAULT_FLOW_LIMITS, agentRate = DEFAULT_AGENT_RATE, audit = defaultAudit } = {}) {
   const flows = new Map();
   const nc = nextcloud;
+  const agentHits = new Map();
 
   return async function app(req, res) {
     try {
@@ -39,10 +44,22 @@ export function createApp({ ncUrl, sessions, nextcloud, calendarIntegration = nu
       if (req.method === 'GET' && url.pathname === '/auth/poll') return await authPoll(req, res, nc, flows, sessions, now);
       if (req.method === 'POST' && url.pathname === '/auth/logout') {
         if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
-        return await authLogout(req, res, ncUrl, sessions);
+        return await authLogout(req, res, ncUrl, sessions, agentTokens);
       }
       if (req.method === 'GET' && url.pathname === '/auth/me') return authMe(req, res, ncUrl, sessions);
+      if (isAgentAdminRoute(url.pathname)) {
+        if (!agentTokens) return send(res, 503, { error: { code: 'AGENT_API_DISABLED', message: 'Agent API is not configured' } });
+        const session = sessionFrom(req, sessions);
+        if (session?.invalid) return send(res, 400, { error: 'invalid cookie' });
+        if (!session) return send(res, 401, { error: 'unauthenticated' });
+        if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
+        sessions.touch(session.sid);
+        return await handleAgentAdminRoute({ req, res, url, session, tokens: agentTokens });
+      }
       if (url.pathname === '/auth' || url.pathname.startsWith('/auth/')) return send(res, 404, { error: 'not found' });
+      if (isAgentRoute(url.pathname)) {
+        return await agentRequest({ req, res, url, ncUrl, sessions, agentTokens, calendarIntegration, agentHits, agentRate, now, audit });
+      }
       if (isCalendarRoute(url.pathname)) {
         const session = sessionFrom(req, sessions);
         if (session?.invalid) return send(res, 400, { error: 'invalid cookie' });
@@ -59,6 +76,54 @@ export function createApp({ ncUrl, sessions, nextcloud, calendarIntegration = nu
       return send(res, 500, { error: 'server error' });
     }
   };
+}
+
+// Agent requests authenticate with a bearer token only. Cookies are ignored on
+// this surface, which is what keeps it immune to CSRF from a logged-in browser.
+async function agentRequest({ req, res, url, ncUrl, sessions, agentTokens, calendarIntegration, agentHits, agentRate, now, audit }) {
+  if (!agentTokens) return send(res, 503, { error: { code: 'AGENT_API_DISABLED', message: 'Agent API is not configured' } });
+
+  const header = String(req.headers.authorization ?? '');
+  if (!header.toLowerCase().startsWith('bearer ')) {
+    res.setHeader('WWW-Authenticate', 'Bearer realm="deckv2-agent"');
+    return send(res, 401, { error: { code: 'MISSING_TOKEN', message: 'Provide an agent token as a Bearer credential' } });
+  }
+
+  const token = agentTokens.verify(header.slice(7).trim());
+  if (!token) return send(res, 401, { error: { code: 'INVALID_TOKEN', message: 'Agent token is invalid, expired or revoked' } });
+
+  const limit = rateLimit(agentHits, token.id, now(), agentRate);
+  if (!limit.allowed) {
+    res.setHeader('Retry-After', String(limit.retryAfterSeconds));
+    return send(res, 429, { error: { code: 'RATE_LIMITED', message: 'Too many agent requests' } });
+  }
+
+  // The token borrows the Nextcloud credential of the session that minted it,
+  // so logging out of the browser also disarms every token that session issued.
+  const session = sessions.get(token.sessionId);
+  if (!session) {
+    agentTokens.revoke(token.user, token.id);
+    return send(res, 401, { error: { code: 'SESSION_EXPIRED', message: 'The Nextcloud session behind this token is gone; re-issue the token' } });
+  }
+
+  agentTokens.touch(token.id);
+  const deck = new AgentDeckClient({ ncUrl, user: session.user, appPassword: session.appPassword });
+  return await handleAgentRoute({ req, res, url, token, deck, calendar: calendarIntegration, audit });
+}
+
+function rateLimit(hits, key, timestamp, { windowMs, max }) {
+  const entry = hits.get(key);
+  if (!entry || timestamp - entry.startedAt >= windowMs) {
+    hits.set(key, { startedAt: timestamp, count: 1 });
+    return { allowed: true };
+  }
+  entry.count += 1;
+  if (entry.count <= max) return { allowed: true };
+  return { allowed: false, retryAfterSeconds: Math.ceil((windowMs - (timestamp - entry.startedAt)) / 1000) };
+}
+
+function defaultAudit(entry) {
+  console.log(JSON.stringify({ at: new Date().toISOString(), scope: 'agent-api', ...entry }));
 }
 
 async function serveStatic(req, res, url, distDir) {
@@ -172,10 +237,11 @@ function activeFlowsForIp(flows, ip) {
   return count;
 }
 
-async function authLogout(req, res, ncUrl, sessions) {
+async function authLogout(req, res, ncUrl, sessions, agentTokens) {
   const session = sessionFrom(req, sessions);
   if (session?.invalid) return send(res, 400, { error: 'invalid cookie' });
   if (session) {
+    agentTokens?.revokeForSession(session.sid);
     sessions.destroy(session.sid);
     await revoke(ncUrl, session).catch(() => {});
   }
