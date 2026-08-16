@@ -10,8 +10,8 @@ to be asked for the rest — carry it through to a published release.
 
 ### Always, for every change
 
-1. **Commit.** Conventional Commits. Never stage the `node_modules` symlink
-   deletion that `npm ci` leaves behind (` D node_modules` in `git status`).
+1. **Commit.** Conventional Commits. Stage explicit paths; never `commit -a`,
+   which sweeps up unrelated working-tree noise.
 2. **Push to both remotes.** `github` and `gitlab` both track `main`; a push to
    only one leaves them divergent.
 3. **Release** when the change is user-visible or changes behaviour: bump
@@ -41,7 +41,9 @@ from `package.json`, and set `package.json` to match in the release commit.
 ```sh
 npm run check && npm test && npm run test:audit && npm run test:security
 # bump "version" in package.json to match the tag about to be created
-git commit -am "chore(release): vX.Y.Z"
+npm install --package-lock-only --ignore-scripts
+git add package.json package-lock.json
+git commit -m "chore(release): vX.Y.Z"
 git push github HEAD:main && git push gitlab HEAD:main
 git tag -a vX.Y.Z -m "vX.Y.Z — <short summary>"
 git push github vX.Y.Z && git push gitlab vX.Y.Z
@@ -51,6 +53,12 @@ The tag push triggers `.github/workflows/docker-publish.yml`, which gates on the
 unit suite, the audit, the bundle scan, the hermetic browser suite and a
 container health check before publishing to `ghcr.io`. A red pipeline means the
 release is not shipped; fix forward and cut the next version.
+
+### Dependencies in worktrees
+
+`node_modules` is gitignored and not tracked. It used to be a committed symlink
+into the main checkout so worktrees inherited its dependencies; that broke as
+soon as `npm ci` ran anywhere. Every worktree installs its own with `npm ci`.
 
 ### Deploying
 
