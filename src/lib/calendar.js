@@ -14,10 +14,9 @@ export class CalendarClientError extends Error {
 }
 
 export class CalendarClient {
-  constructor({ fetch = globalThis.fetch, onUnauthorized = () => {} } = {}) {
+  constructor({ fetch = globalThis.fetch } = {}) {
     const fetchImpl = fetch;
     this.fetch = (...args) => fetchImpl(...args);
-    this.onUnauthorized = onUnauthorized;
   }
 
   status() {
@@ -65,7 +64,6 @@ export class CalendarClient {
     const response = await this.fetch(`${API}${path}`, init);
     const payload = await response.json().catch(() => null);
     if (!response.ok) {
-      if (response.status === 401) this.onUnauthorized();
       const error = payload?.error ?? {};
       throw new CalendarClientError(response.status, error.code ?? 'CALENDAR_INTEGRATION_ERROR', error.message, error.details);
     }

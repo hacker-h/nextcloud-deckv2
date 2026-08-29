@@ -8,16 +8,10 @@ export const GROUP_TYPE = 1;
 
 // Labels and eligible participants both live on the board payload, so a single
 // read backs both pickers.
-export async function getBoardAssignmentOptions(client, boardId, etag) {
-  const r = await client.deck(`/boards/${boardId}`, { etag });
-  if (r.notModified) return r;
-
+export function boardAssignmentOptions(board) {
   return {
-    ...r,
-    data: {
-      labels: (r.data.labels ?? []).map(normalizeLabel),
-      participants: (r.data.acl ?? []).map(normalizeParticipant),
-    },
+    labels: (board?.labels ?? []).map(normalizeLabel),
+    participants: (board?.acl ?? []).map(normalizeParticipant),
   };
 }
 

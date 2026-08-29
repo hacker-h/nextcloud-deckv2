@@ -122,8 +122,10 @@ export class DeckClient {
     return result;
   }
 
+  // `details=1` inlines each board's labels and acl. Without it the list entries
+  // carry `labels: []`, so the label picker needed a second GET /boards/{id}.
   async getBoards(etag) {
-    const r = await this.deck('/boards', { etag });
+    const r = await this.deck('/boards?details=1', { etag });
     if (r.notModified) return r;
     return { ...r, data: r.data.filter((b) => isLive(b) && canEdit(b)) };
   }

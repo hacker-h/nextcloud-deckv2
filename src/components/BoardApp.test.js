@@ -27,7 +27,7 @@ const editBoard = {
 
 function mockBoardFetch(board) {
   return vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
-    if (String(url).endsWith('/boards')) return Promise.resolve(json([board]));
+    if (String(url).includes('/boards?')) return Promise.resolve(json([board]));
     if (String(url).endsWith(`/boards/${board.id}/stacks`)) return Promise.resolve(json([]));
     return Promise.resolve(json({}));
   });

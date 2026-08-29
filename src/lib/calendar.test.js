@@ -30,13 +30,11 @@ describe('CalendarClient', () => {
     expect(JSON.stringify(fetch.mock.calls)).not.toMatch(/bearer|token/i);
   });
 
-  it('surfaces stable bridge errors and handles expired Deck sessions', async () => {
-    const onUnauthorized = vi.fn();
+  it('surfaces bridge errors without ending the Deck session', async () => {
     const fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ error: { code: 'AUTH_EXPIRED', message: 'Reconnect Proton' } }), { status: 401 }));
-    const client = new CalendarClient({ fetch, onUnauthorized });
+    const client = new CalendarClient({ fetch });
 
     await expect(client.calendars()).rejects.toMatchObject({ name: 'CalendarClientError', code: 'AUTH_EXPIRED' });
-    expect(onUnauthorized).toHaveBeenCalledOnce();
     expect(CalendarClientError.prototype).toBeInstanceOf(Error);
   });
 });

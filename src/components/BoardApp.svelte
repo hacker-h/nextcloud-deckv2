@@ -2,7 +2,7 @@
   import { DeckClient } from '../lib/deck.js';
   import { createBoardStore } from '../lib/store.svelte.js';
   import { createCardDetailStore } from '../lib/detail.svelte.js';
-  import { getBoardAssignmentOptions } from '../lib/assignments.js';
+  import { boardAssignmentOptions } from '../lib/assignments.js';
   import { downloadAttachment, uploadAttachment, addLinkAttachment } from '../lib/attachments.js';
   import { touch, sortByMru } from '../lib/mru.js';
   import { accessLevel } from '../lib/permissions.js';
@@ -27,7 +27,7 @@
   let { currentUser, onSignOut = () => {}, onUnauthorized = () => {} } = $props();
 
   const client = new DeckClient({ onUnauthorized: () => onUnauthorized() });
-  const calendar = new CalendarClient({ onUnauthorized: () => onUnauthorized() });
+  const calendar = new CalendarClient();
 
   const board = createBoardStore(client);
 
@@ -110,8 +110,8 @@
     if (!b) return;
     current = b;
     touch(b.id);
+    loadAssignmentOptions(b);
     await board.load(b.id);
-    loadAssignmentOptions(b.id);
   }
 
   let selection = $state(emptySelection());
@@ -241,14 +241,8 @@
     return saved;
   }
 
-  async function loadAssignmentOptions(boardId) {
-    try {
-      const { data } = await getBoardAssignmentOptions(client, boardId);
-      assignmentOptions = data;
-    } catch {
-      // Pickers degrade to empty lists; the rest of the detail view still works.
-      assignmentOptions = { labels: [], participants: [] };
-    }
+  function loadAssignmentOptions(b) {
+    assignmentOptions = boardAssignmentOptions(b);
   }
 
   // Deck has no rename verb: the file is re-PUT under the new name, so the
@@ -276,13 +270,18 @@
     try {
       const list = await loadBoards();
       const preferred = list.find((b) => b.id === preferredBoardId);
+      // The calendar probe is independent of the board payload, so it overlaps
+      // the board load instead of adding a serial round-trip on a slow link.
+      const calendarStatus = calendar.status().catch(() => null);
       await openBoard(preferred ?? list[0]);
-      try {
-        const calendarStatus = await calendar.status();
-        calendarReady = Boolean(calendarStatus.enabled && calendarStatus.connected);
-        if (calendarReady) await syncBoardDates();
-      } catch {
-        calendarReady = false;
+      const status = await calendarStatus;
+      calendarReady = Boolean(status?.enabled && status?.connected);
+      if (calendarReady) {
+        try {
+          await syncBoardDates();
+        } catch {
+          calendarReady = false;
+        }
       }
     } catch (e) {
       board.state.error = e.message;

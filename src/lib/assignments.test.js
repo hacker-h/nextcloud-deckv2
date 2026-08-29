@@ -5,7 +5,7 @@ import {
   USER_TYPE,
   assignLabel,
   assignUser,
-  getBoardAssignmentOptions,
+  boardAssignmentOptions,
   removeLabel,
   unassignUser,
 } from './assignments.js';
@@ -41,19 +41,20 @@ afterEach(() => {
 });
 
 describe('label and assignee operations', () => {
-  it('lists board labels and eligible participants from one board read', async () => {
-    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
-      json({
-        id: 116,
-        labels: [{ id: 42, title: 'urgent', color: 'ff0000', boardId: 116 }],
-        acl: [{ type: USER_TYPE, participant: { uid: 'antonia', displayName: 'Antonia' } }],
-      })
-    );
-
-    const { data } = await getBoardAssignmentOptions(client(), 116);
+  it('derives labels and eligible participants from the board payload', () => {
+    const data = boardAssignmentOptions({
+      id: 116,
+      labels: [{ id: 42, title: 'urgent', color: 'ff0000', boardId: 116 }],
+      acl: [{ type: USER_TYPE, participant: { uid: 'antonia', displayName: 'Antonia' } }],
+    });
 
     expect(data.labels).toEqual([{ id: 42, title: 'urgent', color: 'ff0000', boardId: 116 }]);
     expect(data.participants).toEqual([{ id: 'antonia', displayName: 'Antonia', type: USER_TYPE }]);
+  });
+
+  it('degrades to empty pickers when the board has no labels or acl', () => {
+    expect(boardAssignmentOptions(undefined)).toEqual({ labels: [], participants: [] });
+    expect(boardAssignmentOptions({ id: 1 })).toEqual({ labels: [], participants: [] });
   });
 
   it('assigns then removes a label and a user with the exact endpoint sequence', async () => {
