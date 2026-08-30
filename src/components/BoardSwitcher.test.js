@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/svelte';
+import { fireEvent, render, screen, within } from '@testing-library/svelte';
 import userEvent from '@testing-library/user-event';
 import BoardSwitcher from './BoardSwitcher.svelte';
 
@@ -19,6 +19,27 @@ const boards = [
 ];
 
 describe('BoardSwitcher access badges', () => {
+  it('preloads a board when its switcher item is hovered', async () => {
+    const onpreload = vi.fn();
+    render(BoardSwitcher, { props: { boards, current: boards[0], onselect: vi.fn(), onpreload } });
+
+    await userEvent.click(screen.getByRole('button', { name: /Manage board/ }));
+    const edit = screen.getByRole('button', { name: /Edit board/ });
+    await fireEvent.pointerEnter(edit);
+
+    expect(onpreload).toHaveBeenCalledWith(boards[1]);
+  });
+
+  it('preloads a board when its switcher item receives keyboard focus', async () => {
+    const onpreload = vi.fn();
+    render(BoardSwitcher, { props: { boards, current: boards[0], onselect: vi.fn(), onpreload } });
+
+    await userEvent.click(screen.getByRole('button', { name: /Manage board/ }));
+    screen.getByRole('button', { name: /Edit board/ }).focus();
+
+    expect(onpreload).toHaveBeenCalledWith(boards[1]);
+  });
+
   it('renders different row badges from each board permission level', async () => {
     render(BoardSwitcher, { props: { boards, current: boards[0], onselect: vi.fn() } });
 

@@ -2,7 +2,7 @@
   import AccessBadge from './AccessBadge.svelte';
   import { accessLevel } from '../lib/permissions.js';
 
-  let { boards, current, onselect, open = $bindable(false) } = $props();
+  let { boards, current, onselect, onpreload, open = $bindable(false) } = $props();
 
   let query = $state('');
   let input = $state(null);
@@ -61,6 +61,8 @@
               class="item"
               class:active={board.id === current?.id}
               onclick={() => pick(board)}
+              onpointerenter={() => onpreload?.(board)}
+              onfocus={() => onpreload?.(board)}
             >
               <span class="swatch" style="background:#{board.color}"></span>
               <span class="label">{board.title}</span>
