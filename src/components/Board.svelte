@@ -1,8 +1,10 @@
 <script>
   import Stack from './Stack.svelte';
   import DragPreview from './DragPreview.svelte';
+  import { drag } from '../lib/dnd.svelte.js';
+  import { boardPan } from '../lib/board-pan.js';
 
-  let { stacks, boardId, client, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onClearSelection, onUploadAttachment, onAttachLink } = $props();
+  let { stacks, boardId, client, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onClearSelection, onUploadAttachment, onAttachLink, onAddCard } = $props();
 </script>
 
 <!-- Clicking empty board space clears the selection (PLAN.md §6). The handler
@@ -15,10 +17,10 @@
   data-board
   role="region"
   aria-label="Kanban-Board"
-  onpointerdown={(e) => e.target === e.currentTarget && onClearSelection?.()}
+  use:boardPan={{ onBackgroundClick: onClearSelection, isBlocked: () => drag.active }}
 >
   {#each stacks as stack (stack.id)}
-    <Stack {stack} {onDrop} {onOpenCard} {onSelect} {selectedIds} {dragIds} {onUploadAttachment} {onAttachLink} />
+    <Stack {stack} {boardId} {onDrop} {onOpenCard} {onSelect} {selectedIds} {dragIds} {onUploadAttachment} {onAttachLink} {onAddCard} />
   {/each}
 </div>
 
@@ -35,9 +37,11 @@
     padding: 8px 6px;
     overflow-x: auto;
     overflow-y: hidden;
+    cursor: grab;
   }
+  .board:global(.panning) { cursor: grabbing; user-select: none; }
   /* Trello sizes a lane to its cards, so a short list stays short. The empty
      space below it is still a drop target - that is handled by hit-testing in
      dnd.svelte.js, deliberately not by stretching the visible lane. */
-  .board > :global(.stack) { max-height: 100%; }
+  .board > :global(.stack) { max-height: 100%; cursor: default; }
 </style>
