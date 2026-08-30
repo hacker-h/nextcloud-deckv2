@@ -12,8 +12,9 @@ A ultra-fast, modern, responsive **Trello-inspired web client for Nextcloud Deck
 
 - 🎨 **Trello Dark Theme Aesthetics**: Crafted using official Atlassian design tokens (`#1D2125` canvas, `#101204` list surfaces, `#242528` card tiles).
 - 🧭 **Bottom Navigation Dock**: Quick tab access (`Posteingang`, `Planer`, `Board`, `Boards wechseln`).
-- ⚡ **Instant Board Switcher**: Instant search & board switching drawer with access permission badges.
-- 📝 **Full Card Lifecycle Management**: Edit descriptions, due dates, labels, assignees, sub-card comments, file attachments, and lifecycle actions (`Archivieren`, `Wiederherstellen`, `Löschen`).
+- ⚡ **Instant Board Switcher**: Previously opened and background-preloaded boards render from a bounded in-memory cache while fresh data is fetched from Nextcloud.
+- 🖱️ **Desktop Board Panning**: Drag empty board background horizontally while card drag-and-drop and native scrolling remain independent.
+- 📝 **Full Card Lifecycle Management**: Create cards inline; edit descriptions, due dates, labels, assignees, sub-card comments, file attachments, and lifecycle actions (`Archivieren`, `Wiederherstellen`, `Löschen`).
 - 📦 **Batch Selection & Bulk Actions**: Select multiple cards to move or manage across lists.
 - 🔒 **Secure Auth Bridge**: Authenticated server proxy communicating directly with your Nextcloud Deck REST APIs.
 
