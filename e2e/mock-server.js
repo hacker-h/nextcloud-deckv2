@@ -56,6 +56,7 @@ export class MockBackend {
     // inferring backend activity from UI state.
     this.requests = [];
     this.nextAttachmentId = 9000;
+    this.nextCardId = 20_000;
     // Set by a spec to make the next matching request fail, so error paths are
     // reachable without a broken server.
     this.failNext = null;
@@ -168,6 +169,24 @@ export async function installMockBackend(page, { backend = new MockBackend() } =
     const stacksMatch = path.match(/^\/boards\/(\d+)\/stacks$/);
     if (method === 'GET' && stacksMatch) {
       return json(route, backend.stacks);
+    }
+
+    const createCardMatch = path.match(/^\/boards\/(\d+)\/stacks\/(\d+)\/cards$/);
+    if (method === 'POST' && createCardMatch && body && typeof body === 'object') {
+      const stack = backend.stacks.find((candidate) => Number(candidate.id) === Number(createCardMatch[2]));
+      const card = {
+        ...body,
+        order: body.order ?? 999,
+        id: backend.nextCardId++,
+        boardId: Number(createCardMatch[1]),
+        stackId: Number(createCardMatch[2]),
+        labels: [],
+        attachments: [],
+        attachmentCount: 0,
+        deletedAt: 0,
+      };
+      stack?.cards.push(card);
+      return json(route, card);
     }
 
     // POST .../attachments — link or file. Deck distinguishes by the `type`
