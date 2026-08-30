@@ -8,6 +8,10 @@
 import { ORDER_STEP, planOrders } from '../../shared/ordering.js';
 
 export function createBoardStore(client) {
+  const cache = new Map();
+  const inflight = new Map();
+  const mutationEpochs = new Map();
+  let loadToken = 0;
   const s = $state({
     stacks: [],
     boardId: null,
@@ -25,19 +29,84 @@ export function createBoardStore(client) {
     return null;
   }
 
+  const cloneStacks = (stacks) => JSON.parse(JSON.stringify(stacks));
+  const epochFor = (boardId) => mutationEpochs.get(boardId) ?? 0;
+
+  function cacheStacks(boardId, stacks) {
+    cache.delete(boardId);
+    cache.set(boardId, cloneStacks(stacks));
+    if (cache.size > 50) cache.delete(cache.keys().next().value);
+    return stacks;
+  }
+
+  function cachedStacks(boardId) {
+    const cached = cache.get(boardId);
+    if (!cached) return null;
+    cache.delete(boardId);
+    cache.set(boardId, cached);
+    return cloneStacks(cached);
+  }
+
+  function commitLocal(boardId = s.boardId) {
+    if (boardId == null || s.boardId !== boardId) return;
+    mutationEpochs.set(boardId, epochFor(boardId) + 1);
+    cacheStacks(boardId, s.stacks);
+  }
+
+  function fetchStacks(boardId) {
+    if (inflight.has(boardId)) return inflight.get(boardId);
+    const epoch = epochFor(boardId);
+    const request = client.getStacks(boardId)
+      .then(({ data }) => {
+        if (epochFor(boardId) === epoch) cacheStacks(boardId, data);
+        return { stacks: data, epoch };
+      })
+      .finally(() => inflight.delete(boardId));
+    inflight.set(boardId, request);
+    return request;
+  }
+
   async function load(boardId) {
+    const token = ++loadToken;
     s.boardId = boardId;
-    s.loading = true;
     s.error = null;
-    try {
-      const { data } = await client.getStacks(boardId);
-      s.stacks = data;
-    } catch (e) {
-      s.error = e.message;
-      s.stacks = [];
-    } finally {
+    const cached = cachedStacks(boardId);
+    if (cached) {
+      s.stacks = cached;
       s.loading = false;
+    } else {
+      s.loading = true;
     }
+
+    try {
+      const { stacks, epoch } = await fetchStacks(boardId);
+      if (token !== loadToken || s.boardId !== boardId) return;
+      if (epochFor(boardId) !== epoch) return;
+      s.stacks = stacks;
+    } catch (e) {
+      if (token !== loadToken || s.boardId !== boardId) return;
+      if (e?.status === 403 || e?.status === 404) {
+        cache.delete(boardId);
+        s.error = e.message;
+        s.stacks = [];
+      } else if (!cached) {
+        s.error = e.message;
+        s.stacks = [];
+      }
+    } finally {
+      if (token === loadToken && s.boardId === boardId) s.loading = false;
+    }
+  }
+
+  function preload(boardId) {
+    const cached = cachedStacks(boardId);
+    if (cached) return Promise.resolve(cached);
+    return fetchStacks(boardId)
+      .then(({ stacks }) => stacks)
+      .catch((error) => {
+        if (error?.status === 403 || error?.status === 404) cache.delete(boardId);
+        return null;
+      });
   }
 
   // Re-reads the current board without the loading flag. Callers that mutate a
@@ -46,9 +115,13 @@ export function createBoardStore(client) {
   // and undo section 4.1's "never a global loading state".
   async function refresh() {
     if (s.boardId == null) return;
+    const boardId = s.boardId;
+    const epoch = epochFor(boardId);
     try {
-      const { data } = await client.getStacks(s.boardId);
-      s.stacks = data;
+      const { data } = await client.getStacks(boardId);
+      if (epochFor(boardId) !== epoch) return;
+      cacheStacks(boardId, data);
+      if (s.boardId === boardId) s.stacks = data;
     } catch {
       // A failed refresh is cosmetic: the mutation itself already succeeded and
       // the stale tile corrects itself on the next load. Surfacing an error here
@@ -66,6 +139,7 @@ export function createBoardStore(client) {
 
     const { stack, index, card: previous } = found;
     stack.cards[index] = { ...card, stackId: previous.stackId, order: previous.order };
+    commitLocal();
     return stack.cards[index];
   }
 
@@ -74,7 +148,18 @@ export function createBoardStore(client) {
     if (!found) return null;
 
     found.stack.cards.splice(found.index, 1);
+    commitLocal();
     return found.card;
+  }
+
+  function addCard({ boardId, stackId, card }) {
+    if (!card || s.boardId !== boardId) return null;
+    const stack = s.stacks.find((candidate) => candidate.id === stackId);
+    if (!stack) return null;
+    const added = { ...card, stackId };
+    stack.cards.push(added);
+    commitLocal(boardId);
+    return added;
   }
 
   function failToast(failed) {
@@ -119,6 +204,7 @@ export function createBoardStore(client) {
     const rollback = () => {
       for (const [card, f] of snapshot.fields) Object.assign(card, f);
       s.stacks = snapshot.stacks;
+      commitLocal(boardId);
     };
 
     // --- optimistic local update ---
@@ -132,6 +218,7 @@ export function createBoardStore(client) {
       card.order = order;
       return card;
     });
+    commitLocal(boardId);
 
     // --- send in background, bounded parallelism (M0.3: 6 parallel = 4.3s) ---
     s.pending += dirty.length;
@@ -166,16 +253,20 @@ export function createBoardStore(client) {
     const found = findCard(cardId);
     if (!found) return null;
     found.stack.cards.splice(found.index, 1);
+    commitLocal();
     return found.card;
   }
 
   function restoreCards(cards) {
+    let restored = false;
     for (const card of cards) {
       const stack = s.stacks.find((x) => x.id === card.stackId);
       if (!stack) continue;
       const at = stack.cards.findIndex((c) => Number(c.order) > Number(card.order));
       stack.cards.splice(at === -1 ? stack.cards.length : at, 0, card);
+      restored = true;
     }
+    if (restored) commitLocal();
   }
 
   function removeCards(cardIds) {
@@ -195,15 +286,18 @@ export function createBoardStore(client) {
       card.order = order + i;
     });
     dest.cards.splice(at, 0, ...cards);
+    commitLocal();
     return { order };
   }
 
   return {
     state: s,
     load,
+    preload,
     refresh,
     moveCards,
     replaceCard,
+    addCard,
     removeCard,
     takeCard,
     restoreCards,

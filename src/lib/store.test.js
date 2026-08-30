@@ -23,6 +23,16 @@ const cardIn = (store, stackId, id) =>
   store.state.stacks.find((s) => s.id === stackId).cards.find((c) => c.id === id);
 
 describe('board store card reconciliation', () => {
+  it('appends a created card only while its board is active', () => {
+    const store = boardStore();
+    store.state.boardId = 116;
+
+    expect(store.addCard({ boardId: 116, stackId: 10, card: { id: 88, title: 'New' } })).toMatchObject({ id: 88, stackId: 10 });
+    expect(store.state.stacks[1].cards).toHaveLength(1);
+    expect(store.addCard({ boardId: 117, stackId: 10, card: { id: 89, title: 'Stale' } })).toBeNull();
+    expect(store.state.stacks[1].cards).toHaveLength(1);
+  });
+
   it('patches every tile-visible field in place', () => {
     const store = boardStore();
 
@@ -116,6 +126,130 @@ describe('board store card reconciliation', () => {
 
     expect(store.removeCard(999999)).toBeNull();
     expect(store.state.stacks[0].cards).toHaveLength(2);
+  });
+});
+
+describe('board store loading', () => {
+  it('shows a cached board immediately while revalidating it', async () => {
+    let resolveRefresh;
+    const client = {
+      getStacks: vi.fn()
+        .mockResolvedValueOnce({ data: [{ id: 9, cards: [{ id: 1 }] }] })
+        .mockResolvedValueOnce({ data: [{ id: 10, cards: [] }] })
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; })),
+    };
+    const store = createBoardStore(client);
+    await store.load(1);
+    await store.load(2);
+
+    const loading = store.load(1);
+    expect(store.state.loading).toBe(false);
+    expect(store.state.stacks[0].cards[0].id).toBe(1);
+
+    resolveRefresh({ data: [{ id: 9, cards: [{ id: 2 }] }] });
+    await loading;
+    expect(store.state.stacks[0].cards[0].id).toBe(2);
+  });
+
+  it('does not overwrite a card created during stale revalidation', async () => {
+    let resolveRefresh;
+    const client = {
+      getStacks: vi.fn()
+        .mockResolvedValueOnce({ data: [{ id: 9, cards: [{ id: 1, order: 0 }] }] })
+        .mockResolvedValueOnce({ data: [{ id: 10, cards: [] }] })
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; })),
+    };
+    const store = createBoardStore(client);
+    await store.load(1);
+    await store.load(2);
+
+    const loading = store.load(1);
+    store.addCard({ boardId: 1, stackId: 9, card: { id: 88, title: 'New', order: 65536 } });
+    resolveRefresh({ data: [{ id: 9, cards: [{ id: 1, order: 0 }] }] });
+    await loading;
+
+    expect(store.state.stacks[0].cards.map((card) => card.id)).toEqual([1, 88]);
+  });
+
+  it('ignores a stale response after switching boards', async () => {
+    let resolveFirst;
+    const client = {
+      getStacks: vi.fn()
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveFirst = resolve; }))
+        .mockResolvedValueOnce({ data: [{ id: 20, cards: [] }] }),
+    };
+    const store = createBoardStore(client);
+
+    const first = store.load(1);
+    await store.load(2);
+    resolveFirst({ data: [{ id: 10, cards: [] }] });
+    await first;
+
+    expect(store.state.boardId).toBe(2);
+    expect(store.state.stacks[0].id).toBe(20);
+  });
+
+  it('deduplicates concurrent background preloads', async () => {
+    let resolve;
+    const client = { getStacks: vi.fn(() => new Promise((done) => { resolve = done; })) };
+    const store = createBoardStore(client);
+
+    const first = store.preload(3);
+    const second = store.preload(3);
+    expect(client.getStacks).toHaveBeenCalledOnce();
+    resolve({ data: [{ id: 30, cards: [] }] });
+
+    await expect(Promise.all([first, second])).resolves.toEqual([
+      [{ id: 30, cards: [] }],
+      [{ id: 30, cards: [] }],
+    ]);
+  });
+
+  it('purges cached private data when revalidation returns 403', async () => {
+    const denied = Object.assign(new Error('Permission denied'), { status: 403 });
+    const client = {
+      getStacks: vi.fn()
+        .mockResolvedValueOnce({ data: [{ id: 9, cards: [{ id: 1 }] }] })
+        .mockResolvedValueOnce({ data: [{ id: 10, cards: [] }] })
+        .mockRejectedValueOnce(denied)
+        .mockResolvedValueOnce({ data: [{ id: 9, cards: [{ id: 2 }] }] }),
+    };
+    const store = createBoardStore(client);
+    await store.load(1);
+    await store.load(2);
+
+    await store.load(1);
+    expect(store.state.stacks).toEqual([]);
+    expect(store.state.error).toBe('Permission denied');
+
+    await store.load(1);
+    expect(client.getStacks).toHaveBeenCalledTimes(4);
+    expect(store.state.stacks[0].cards[0].id).toBe(2);
+  });
+
+  it('keeps the rollback snapshot in cache after a failed move', async () => {
+    let resolveRefresh;
+    const client = {
+      getStacks: vi.fn()
+        .mockResolvedValueOnce({ data: [
+          { id: 9, cards: [{ id: 1, title: 'Card', stackId: 9, order: 0 }] },
+          { id: 10, cards: [] },
+        ] })
+        .mockResolvedValueOnce({ data: [{ id: 20, cards: [] }] })
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveRefresh = resolve; })),
+      moveCard: vi.fn().mockRejectedValue(new Error('Move failed')),
+    };
+    const store = createBoardStore(client);
+    await store.load(1);
+    await store.moveCards({ cardIds: [1], toStackId: 10, index: 0, boardId: 1 });
+    await store.load(2);
+
+    const loading = store.load(1);
+    expect(store.state.stacks[0].cards[0].id).toBe(1);
+    expect(store.state.stacks[1].cards).toHaveLength(0);
+
+    resolveRefresh({ data: store.state.stacks });
+    await loading;
   });
 });
 
