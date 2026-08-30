@@ -12,6 +12,8 @@ const read = () => {
   }
 };
 
+export const readMru = () => read();
+
 export function touch(boardId) {
   const id = String(boardId);
   const next = [id, ...read().filter((x) => x !== id)].slice(0, 50);

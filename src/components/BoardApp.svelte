@@ -1,15 +1,19 @@
 <script>
+  import { onDestroy } from 'svelte';
+  import { ORDER_STEP } from '../../shared/ordering.js';
   import { DeckClient } from '../lib/deck.js';
   import { createBoardStore } from '../lib/store.svelte.js';
   import { createCardDetailStore } from '../lib/detail.svelte.js';
   import { boardAssignmentOptions } from '../lib/assignments.js';
   import { downloadAttachment, uploadAttachment, addLinkAttachment } from '../lib/attachments.js';
-  import { touch, sortByMru } from '../lib/mru.js';
+  import { touch, sortByMru, readMru } from '../lib/mru.js';
   import { accessLevel } from '../lib/permissions.js';
   import { applyCardClick, applyShiftClick, emptySelection, orderedSelection } from '../lib/selection.js';
   import { createInboxStore } from '../lib/inbox.svelte.js';
   import { withoutInbox, readCollapsed, writeCollapsed } from '../lib/inbox.js';
   import { CalendarClient, applyCalendarPulls, calendarEntries } from '../lib/calendar.js';
+  import { createCard } from '../lib/cards.js';
+  import { preloadBoards } from '../lib/board-preload.js';
   import Board from './Board.svelte';
   import InboxPanel from './InboxPanel.svelte';
   import BoardSwitcher from './BoardSwitcher.svelte';
@@ -105,13 +109,38 @@
   // Development points at a dedicated throwaway board so a bad drag can never
   // scramble real data. Set VITE_BOARD_ID to override.
   const preferredBoardId = Number(import.meta.env.VITE_BOARD_ID) || null;
+  let preloadToken = 0;
+  onDestroy(() => { preloadToken += 1; });
+
+  const idle = () => new Promise((resolve) => {
+    if ('requestIdleCallback' in window) window.requestIdleCallback(resolve, { timeout: 1000 });
+    else window.setTimeout(resolve, 0);
+  });
+
+  async function preloadInBackground(activeId, token) {
+    await preloadBoards({
+      boards,
+      activeId,
+      mru: readMru(),
+      idle,
+      shouldContinue: () => !(
+        token !== preloadToken ||
+        document.hidden ||
+        !navigator.onLine ||
+        navigator.connection?.saveData
+      ),
+      preload: board.preload,
+    });
+  }
 
   async function openBoard(b) {
     if (!b) return;
+    const token = ++preloadToken;
     current = b;
     touch(b.id);
     loadAssignmentOptions(b);
     await board.load(b.id);
+    if (token === preloadToken) void preloadInBackground(b.id, token);
   }
 
   let selection = $state(emptySelection());
@@ -162,6 +191,15 @@
     }
 
     if (cardIds.length > 1 || selection.ids.includes(cardIds[0])) clearSelection();
+  }
+
+  async function handleAddCard(target) {
+    const stack = stacks.find((candidate) => candidate.id === target.stackId);
+    const parsedOrder = Number(stack?.cards.at(-1)?.order);
+    const lastOrder = Number.isFinite(parsedOrder) ? parsedOrder : -ORDER_STEP;
+    const { data } = await createCard(client, { ...target, order: lastOrder + ORDER_STEP });
+    board.addCard({ ...target, card: data });
+    return data;
   }
 
   async function moveFromInbox({ cards, toStackId, index }) {
@@ -306,7 +344,7 @@
 
   <div class="main">
     <header class="topbar">
-      <BoardSwitcher {boards} {current} onselect={openBoard} bind:open={switcherOpen} />
+      <BoardSwitcher {boards} {current} onselect={openBoard} onpreload={(candidate) => board.preload(candidate.id)} bind:open={switcherOpen} />
       {#if current}
         <span class="current-access"><AccessBadge level={accessLevel(current)} /></span>
       {/if}
@@ -369,6 +407,7 @@
         onClearSelection={clearSelection}
         onUploadAttachment={handleTileUploadAttachment}
         onAttachLink={handleTileAttachLink}
+        onAddCard={handleAddCard}
       />
     {/if}
 
