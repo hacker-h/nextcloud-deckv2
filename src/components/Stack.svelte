@@ -1,8 +1,52 @@
 <script>
+  import { tick } from 'svelte';
   import Card from './Card.svelte';
   import { drag } from '../lib/dnd.svelte.js';
 
-  let { stack, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onUploadAttachment, onAttachLink } = $props();
+  let { stack, boardId, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onUploadAttachment, onAttachLink, onAddCard } = $props();
+
+  let adding = $state(false);
+  let title = $state('');
+  let saving = $state(false);
+  let error = $state('');
+  let input = $state();
+  let addButton = $state();
+
+  async function startAdding() {
+    adding = true;
+    error = '';
+    await tick();
+    input?.focus();
+  }
+
+  async function cancelAdding() {
+    if (saving) return;
+    adding = false;
+    title = '';
+    error = '';
+    await tick();
+    addButton?.focus();
+  }
+
+  async function submit() {
+    const cleanTitle = title.trim();
+    if (!cleanTitle || saving) return;
+    saving = true;
+    error = '';
+    try {
+      await onAddCard?.({ boardId, stackId: stack.id, title: cleanTitle });
+      title = '';
+      adding = false;
+      await tick();
+      addButton?.focus();
+    } catch (cause) {
+      error = cause?.message ?? 'Karte konnte nicht erstellt werden';
+      await tick();
+      input?.focus();
+    } finally {
+      saving = false;
+    }
+  }
 
   const isOver = $derived(drag.active && drag.overStack === stack.id);
   // Cards being dragged are hidden from the layout so the placeholder occupies
@@ -38,15 +82,44 @@
     {/if}
   </div>
 
-  <!-- Trello shows this footer on every list. Card creation lands in M6;
-       until then it is a disabled affordance, not a dead control. -->
   <footer class="foot">
-    <button class="add" disabled title="Adding cards arrives in M6">
-      <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
-        <path d="M8 3.5v9M3.5 8h9"/>
-      </svg>
-      Eine Karte hinzufügen
-    </button>
+    {#if adding}
+      <form class="composer" onsubmit={(event) => { event.preventDefault(); submit(); }}>
+        <textarea
+          bind:this={input}
+          bind:value={title}
+          class="title-input"
+          aria-label={`Neue Karte in ${stack.title}`}
+          placeholder="Titel für diese Karte eingeben"
+          rows="3"
+          disabled={saving}
+          oninput={() => { error = ''; }}
+          onkeydown={(event) => {
+            if (event.key === 'Escape') {
+              event.preventDefault();
+              cancelAdding();
+            } else if (event.key === 'Enter' && !event.shiftKey) {
+              event.preventDefault();
+              submit();
+            }
+          }}
+        ></textarea>
+        {#if error}<p class="composer-error" role="alert">{error}</p>{/if}
+        <div class="composer-actions">
+          <button class="save" type="submit" disabled={!title.trim() || saving}>
+            {saving ? 'Wird hinzugefügt…' : 'Karte hinzufügen'}
+          </button>
+          <button class="cancel" type="button" aria-label="Abbrechen" disabled={saving} onclick={cancelAdding}>×</button>
+        </div>
+      </form>
+    {:else}
+      <button bind:this={addButton} class="add" type="button" disabled={!onAddCard} onclick={startAdding}>
+        <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
+          <path d="M8 3.5v9M3.5 8h9"/>
+        </svg>
+        Eine Karte hinzufügen
+      </button>
+    {/if}
   </footer>
 </section>
 
@@ -114,6 +187,34 @@
   }
   .add:hover:not(:disabled) { background: #A1BDD914; color: var(--text); }
   .add:disabled { opacity: .55; cursor: default; }
+
+  .composer { display: grid; gap: 8px; }
+  .title-input {
+    width: 100%;
+    min-height: 72px;
+    resize: vertical;
+    border: 1px solid #579DFF;
+    border-radius: var(--card-radius);
+    padding: 10px 12px;
+    background: var(--card-bg);
+    color: var(--text);
+    font: inherit;
+    line-height: 1.35;
+    box-shadow: 0 0 0 1px #579DFF;
+  }
+  .title-input:focus { outline: 0; }
+  .composer-actions { display: flex; align-items: center; gap: 6px; }
+  .save, .cancel {
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  .save { padding: 8px 12px; background: #579DFF; color: #101214; font-weight: 650; }
+  .save:hover:not(:disabled) { background: #85B8FF; }
+  .save:disabled { opacity: .55; cursor: default; }
+  .cancel { width: 34px; height: 34px; background: transparent; color: var(--text-dim); font-size: 24px; }
+  .cancel:hover:not(:disabled) { background: #A1BDD914; color: var(--text); }
+  .composer-error { margin: 0; color: #F87168; font-size: 12px; }
 
   /* The drop indicator. Trello shows a recessed slot that the cards animate
      around; the 120ms ease is what makes it feel deliberate rather than jumpy. */
