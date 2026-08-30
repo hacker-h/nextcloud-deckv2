@@ -2,10 +2,12 @@ export function getCard(client, { boardId, stackId, cardId, etag, signal }) {
   return client.deck(`/boards/${boardId}/stacks/${stackId}/cards/${cardId}`, { etag, signal });
 }
 
-export function createCard(client, { boardId, stackId, title, description = '', duedate = null }) {
+export function createCard(client, { boardId, stackId, title, description = '', duedate = null, order }) {
+  const body = { title, description, duedate, type: 'plain' };
+  if (order !== undefined) body.order = order;
   return client.deck(`/boards/${boardId}/stacks/${stackId}/cards`, {
     method: 'POST',
-    body: { title, description, duedate, type: 'plain' }
+    body,
   });
 }
 

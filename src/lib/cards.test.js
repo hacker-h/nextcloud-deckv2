@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DeckClient, DeckError } from './deck.js';
-import { archiveCard, deleteCard, getCard, unarchiveCard, updateCard } from './cards.js';
+import { archiveCard, createCard, deleteCard, getCard, unarchiveCard, updateCard } from './cards.js';
 
 function client() {
   return new DeckClient();
@@ -35,6 +35,18 @@ afterEach(() => {
 });
 
 describe('card API operations', () => {
+  it('creates a plain card in the selected stack', async () => {
+    const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json({ id: 88, title: 'New card' }));
+
+    await createCard(client(), { boardId: 116, stackId: 9, title: 'New card', order: 131072 });
+
+    expect(fetch.mock.calls[0][0]).toBe('/api/deck/boards/116/stacks/9/cards');
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: 'POST' });
+    expect(JSON.parse(fetch.mock.calls[0][1].body)).toEqual({
+      title: 'New card', description: '', duedate: null, type: 'plain', order: 131072,
+    });
+  });
+
   it('reads a card with an optional ETag', async () => {
     const fetch = vi.spyOn(globalThis, 'fetch').mockResolvedValue(json(richCard(), { headers: { ETag: '"card-etag"' } }));
 
