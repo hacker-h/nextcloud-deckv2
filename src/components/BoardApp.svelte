@@ -279,15 +279,15 @@
     return saved;
   }
 
+  function syncTitleCalendar() {
+    void syncBoardDates().catch((caught) => {
+      tileToast = { status: 'error', message: `Deck gespeichert; Kalender-Sync ausstehend: ${caught?.message ?? 'Fehler'}` };
+    });
+  }
+
   async function saveDetailTitle(changes) {
     const saved = await detail.saveCore(changes);
-    if (saved) {
-      try {
-        await syncBoardDates();
-      } catch (caught) {
-        tileToast = { status: 'error', message: `Deck gespeichert; Kalender-Sync ausstehend: ${caught?.message ?? 'Fehler'}` };
-      }
-    }
+    if (saved) syncTitleCalendar();
     return saved;
   }
 

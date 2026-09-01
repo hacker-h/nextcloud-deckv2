@@ -36,6 +36,7 @@
   let dragDepth = 0;
 
   function startTitleEdit() {
+    if (titleSave) return;
     titleDraft = card?.title ?? '';
     editingTitle = true;
   }
@@ -334,7 +335,7 @@
             autofocus
           />
         {:else}
-          <button class="title-button" type="button" onclick={startTitleEdit} title="Titel bearbeiten">
+          <button class="title-button" type="button" disabled={Boolean(titleSave)} onclick={startTitleEdit} title="Titel bearbeiten">
             {card?.title ?? 'Karte'}
             <svg class="edit-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
               <path d="m3 11-.5 2.5L5 13l7.2-7.2-2-2L3 11Z" />
@@ -455,6 +456,7 @@
     cursor: text;
   }
   .title-button:hover { background: #a1bdd914; }
+  .title-button:disabled { cursor: progress; opacity: .72; }
   .title-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .edit-icon { flex: 0 0 auto; opacity: 0; color: var(--text-dim); transition: opacity 120ms ease; }
   .title-button:hover .edit-icon, .title-button:focus-visible .edit-icon { opacity: 1; }

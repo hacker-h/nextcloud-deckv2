@@ -105,6 +105,25 @@ describe('CardDetailModal', () => {
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
+  it('prevents a second title edit while the first save is pending', async () => {
+    let finishRename;
+    const onRename = vi.fn(() => new Promise((resolve) => { finishRename = resolve; }));
+    open({ onRename });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Detail QA' }));
+    const input = screen.getByLabelText('Kartentitel');
+    await fireEvent.input(input, { target: { value: 'First save' } });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+
+    const titleButton = screen.getByRole('button', { name: 'Detail QA' });
+    expect(titleButton).toBeDisabled();
+    await fireEvent.click(titleButton);
+    expect(screen.queryByLabelText('Kartentitel')).not.toBeInTheDocument();
+
+    finishRename({ title: 'First save' });
+    await vi.waitFor(() => expect(titleButton).toBeEnabled());
+  });
+
   it('locks body scroll while open and restores it on close', () => {
     const { unmount } = open();
     expect(document.body.style.overflow).toBe('hidden');
