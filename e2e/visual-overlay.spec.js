@@ -99,9 +99,100 @@ test.describe('visual state of the card detail modal', () => {
     await expect(page.locator('[data-testid="detail-skeleton"]')).toHaveCount(0);
   });
 
-  test('the modal renders without a duplicated sidebar', async ({ board }) => {
+  test('the modal renders without a duplicated sidebar', async ({ board }, testInfo) => {
     const { page } = board;
-    await expect(page.locator('[role="dialog"]').first()).toHaveScreenshot('detail-modal.png');
+    const dialog = page.locator('[role="dialog"]').first();
+    await expect(dialog.locator('.title-button')).toHaveCount(1);
+    await expect(dialog.locator('.title-btn')).toHaveCount(0);
+    if (testInfo.project.name === 'hermetic-chromium') {
+      await expect(dialog).toHaveScreenshot('detail-modal.png');
+    }
+  });
+
+  test('the card title appears once and edits directly in the header', async ({ board }) => {
+    const { page } = board;
+    const dialog = page.locator('[role="dialog"]').first();
+    const title = dialog.locator('.title-button');
+
+    await expect(title).toHaveCount(1);
+    await expect(dialog.locator('.title-btn')).toHaveCount(0);
+    await title.click();
+    await expect(dialog.getByLabel('Kartentitel')).toBeFocused();
+  });
+
+  test('a backdrop close saves an active title edit before dismissing', async ({ board }) => {
+    const { page, backend } = board;
+    const dialog = page.locator('[role="dialog"]').first();
+    await dialog.locator('.title-button').click();
+    await dialog.getByLabel('Kartentitel').fill('Saved from backdrop');
+    await page.locator('.backdrop').dispatchEvent('pointerdown', { pointerId: 1 });
+
+    await expect(dialog).toHaveCount(0);
+    expect(backend.find('/cards/', 'PUT').at(-1)?.body).toMatchObject({ title: 'Saved from backdrop' });
+  });
+
+  test('the close button saves an active title edit without a stale dirty prompt', async ({ board }) => {
+    const { page, backend } = board;
+    const dialog = page.locator('[role="dialog"]').first();
+    await dialog.locator('.title-button').click();
+    await dialog.getByLabel('Kartentitel').fill('Saved from close');
+    await dialog.getByRole('button', { name: 'Kartendetails schließen' }).click();
+
+    await expect(dialog).toHaveCount(0);
+    expect(backend.find('/cards/', 'PUT').at(-1)?.body).toMatchObject({ title: 'Saved from close' });
+    await expect(page.getByText('Sie haben ungespeicherte Änderungen.')).toHaveCount(0);
+  });
+
+  test('the sidebar is spaced and the native file picker is visually hidden', async ({ board }) => {
+    const { page } = board;
+    const dialog = page.locator('[role="dialog"]').first();
+    const sections = dialog.locator('.side > section');
+    await expect(sections).toHaveCount(3);
+
+    const boxes = await sections.evaluateAll((nodes) => nodes.map((node) => {
+      const box = node.getBoundingClientRect();
+      return { top: box.top, bottom: box.bottom };
+    }));
+    expect(boxes[1].top - boxes[0].bottom).toBeGreaterThanOrEqual(20);
+    expect(boxes[2].top - boxes[1].bottom).toBeGreaterThanOrEqual(20);
+
+    const file = dialog.locator('input[type="file"]');
+    await expect(file).toHaveCount(1);
+    expect(await file.evaluate((input) => {
+      const style = getComputedStyle(input);
+      return style.position === 'absolute' && input.getBoundingClientRect().width <= 1;
+    })).toBe(true);
+    await expect(dialog.getByRole('button', { name: /Datei auswählen/ })).toBeVisible();
+  });
+
+  test('deletion asks for confirmation without title re-entry', async ({ board }, testInfo) => {
+    const { page } = board;
+    const dialog = page.locator('[role="dialog"]').first();
+    await dialog.getByRole('button', { name: 'Aktionen' }).click();
+    await dialog.getByRole('menuitem', { name: 'Karte löschen' }).click();
+
+    const confirm = dialog.getByRole('alertdialog', { name: 'Löschen bestätigen' });
+    await expect(confirm).toBeVisible();
+    await expect(confirm.getByRole('textbox')).toHaveCount(0);
+    const deleteButton = confirm.getByRole('button', { name: 'Karte löschen' });
+    await expect(deleteButton).toBeDisabled();
+    await expect(deleteButton).toBeEnabled();
+    if (testInfo.project.name === 'hermetic-chromium') {
+      await expect(confirm).toHaveScreenshot('delete-confirm.png');
+    }
+  });
+
+  test('a double-click on the delete menu item cannot confirm deletion', async ({ board }) => {
+    const { page, backend } = board;
+    const dialog = page.locator('[role="dialog"]').first();
+    await dialog.getByRole('button', { name: 'Aktionen' }).click();
+    const item = dialog.getByRole('menuitem', { name: 'Karte löschen' });
+    const box = await item.boundingBox();
+
+    await page.mouse.dblclick(box.x + box.width / 2, box.y + box.height / 2, { delay: 80 });
+
+    await expect(dialog.getByRole('alertdialog', { name: 'Löschen bestätigen' })).toBeVisible();
+    expect(backend.find('/cards/', 'DELETE')).toHaveLength(0);
   });
 
   // Audit bug 4: the action pill row offered Labels and Datum while the sidebar
