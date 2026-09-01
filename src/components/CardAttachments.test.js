@@ -44,6 +44,13 @@ describe('CardAttachments', () => {
     expect(onUpload).toHaveBeenCalledWith(f);
   });
 
+  it('keeps the hidden picker out of tab order and exposes the styled trigger', () => {
+    setup();
+
+    expect(screen.getByLabelText('Datei anhängen')).toHaveAttribute('tabindex', '-1');
+    expect(screen.getByRole('button', { name: /Datei auswählen/ })).toBeVisible();
+  });
+
   it('uploads a dropped file without bubbling the drag to the board', async () => {
     const { onUpload } = setup();
     const boardDrop = vi.fn();

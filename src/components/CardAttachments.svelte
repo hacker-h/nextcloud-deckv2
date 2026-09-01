@@ -109,30 +109,36 @@
       <path d="M10.5 5.5 6 10a1.8 1.8 0 0 0 2.5 2.5l4.5-4.5a3.2 3.2 0 0 0-4.5-4.5L3.6 8.4a4.6 4.6 0 0 0 6.5 6.5"/>
     </svg>
     <h3 class="legend">Anhänge</h3>
-    <div class="flex-spacer"></div>
-    <button class="btn add-btn" type="button" onclick={() => input?.click()}>Hinzufügen</button>
   </div>
 
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
+  <button
+    type="button"
     class="dropzone"
     class:dragging
     data-testid="dropzone"
+    disabled={pending}
+    onclick={() => input?.click()}
     ondragenter={onDragEnter}
     ondragover={swallow}
     ondragleave={onDragLeave}
     ondrop={onDrop}
   >
-    <p class="hint">Datei hier ablegen</p>
-    <input
-      class="file"
-      type="file"
-      aria-label="Datei anhängen"
-      bind:this={input}
-      onchange={onPick}
-      disabled={pending}
-    />
-  </div>
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true">
+      <path d="M12 16V5m0 0L8 9m4-4 4 4" />
+      <path d="M5 15v3a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-3" />
+    </svg>
+    <span class="drop-title">Datei auswählen</span>
+    <span class="drop-copy">oder hier ablegen</span>
+  </button>
+  <input
+    class="file"
+    type="file"
+    aria-label="Datei anhängen"
+    bind:this={input}
+    onchange={onPick}
+    disabled={pending}
+    tabindex="-1"
+  />
 
   {#if pending}<p class="hint" role="status">Wird hochgeladen…</p>{/if}
 
@@ -235,54 +241,55 @@
     color: #b6c2cf;
   }
 
-  .flex-spacer { flex: 1; }
-
-  .add-btn {
-    padding: 6px 12px;
-    background: #2c333a;
-    border: 0;
-    border-radius: 6px;
-    color: #b6c2cf;
-    font-size: 13px;
-    font-weight: 500;
-    cursor: pointer;
-  }
-  .add-btn:hover { background: #38414a; color: #ffffff; }
-
   .dropzone {
     display: flex;
     flex-direction: column;
-    gap: 8px;
-    padding: 12px;
-    margin-left: 28px;
+    width: 100%;
+    min-height: 112px;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    padding: 16px 12px;
     border: 1px dashed #38414a;
     border-radius: 8px;
     background: #22272b;
-    /* The sidebar column is 200px and a native file input reports a much wider
-       intrinsic width, so without this the dropzone spilled out of the column
-       and over the text beside it. */
-    min-width: 0;
-    overflow: hidden;
-  }
-  .dragging { border-color: #579dff; background: #2c333a; }
-
-  .file {
     color: #9fadbc;
     font: inherit;
-    min-width: 0;
-    max-width: 100%;
-    font-size: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color 120ms ease, background 120ms ease, color 120ms ease;
+  }
+  .dropzone:hover:not(:disabled), .dropzone:focus-visible, .dragging {
+    border-color: #579dff;
+    background: #2c333a;
+    color: #d6e4f0;
+  }
+  .dropzone:focus-visible { outline: 2px solid #579dff; outline-offset: 2px; }
+  .dropzone:disabled { opacity: .6; cursor: wait; }
+  .drop-title { margin-top: 4px; color: #b6c2cf; font-size: 13px; font-weight: 600; }
+  .drop-copy { font-size: 11px; }
+
+  .file {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .links-subhead {
-    margin-left: 28px;
+    margin-left: 0;
     font-size: 12px;
     font-weight: 600;
     color: #9fadbc;
   }
 
   ul { margin: 0; padding: 0; list-style: none; }
-  .list { display: flex; flex-direction: column; gap: 6px; margin-left: 28px; }
+  .list { display: flex; flex-direction: column; gap: 6px; margin-left: 0; }
   .deleted { opacity: .7; }
 
   .item {
