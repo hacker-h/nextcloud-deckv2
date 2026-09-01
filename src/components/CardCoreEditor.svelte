@@ -7,8 +7,6 @@
 
   let { card, onSave, onDraftChange = () => {}, error = null, members = [], onCreateFromTemplate } = $props();
 
-  let editingTitle = $state(false);
-  let titleDraft = $state('');
   let editingDesc = $state(false);
   let descDraft = $state('');
   let showAddChecklist = $state(false);
@@ -34,7 +32,6 @@
   $effect(() => {
     onDraftChange(editingDesc && descDraft !== descriptionText ? { description: descDraft } : null);
   });
-  const titleInvalid = $derived(editingTitle && !titleDraft.trim());
 
   const due = $derived(toLocalInput(card?.duedate));
   const overdue = $derived.by(() => {
@@ -71,34 +68,6 @@
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
   }
 
-  function startTitle() {
-    titleDraft = card?.title ?? '';
-    editingTitle = true;
-  }
-
-  async function commitTitle() {
-    if (!editingTitle) return;
-    const next = titleDraft.trim();
-    if (!next) return;
-
-    editingTitle = false;
-    if (next !== card?.title) await onSave?.({ title: next });
-  }
-
-  function cancelTitle() {
-    editingTitle = false;
-    titleDraft = '';
-  }
-
-  function onTitleKeydown(e) {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      commitTitle();
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      cancelTitle();
-    }
-  }
 
   function startDesc() {
     descDraft = descriptionText;
@@ -193,34 +162,6 @@
       {/if}
     </div>
   {/if}
-
-  <div class="header-row">
-    <span class="icon-circle" aria-hidden="true">
-      <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8">
-        <circle cx="8" cy="8" r="6" />
-      </svg>
-    </span>
-    <div class="title-container">
-      {#if editingTitle}
-        <!-- svelte-ignore a11y_autofocus -->
-        <input
-          class="title-input"
-          type="text"
-          aria-label="Card title"
-          aria-invalid={titleInvalid}
-          bind:value={titleDraft}
-          onkeydown={onTitleKeydown}
-          onblur={commitTitle}
-          autofocus
-        />
-        {#if titleInvalid}
-          <p class="hint" role="alert">Titel darf nicht leer sein</p>
-        {/if}
-      {:else}
-        <button class="title-btn" type="button" onclick={startTitle}>{card?.title ?? ''}</button>
-      {/if}
-    </div>
-  </div>
 
   <div class="action-pills">
     <button class="pill-btn" type="button" onclick={startDesc}>
@@ -346,59 +287,11 @@
 <style>
   .core { display: flex; flex-direction: column; gap: 20px; }
 
-  .header-row {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-  }
-
-  .icon-circle {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin-top: 4px;
-    color: #9fadbc;
-  }
-
-  .title-container {
-    flex: 1;
-  }
-
-  .title-btn {
-    width: 100%;
-    padding: 2px 6px;
-    margin-left: -6px;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: #b6c2cf;
-    font-size: 20px;
-    font-weight: 600;
-    line-height: 28px;
-    text-align: left;
-    word-break: break-word;
-    cursor: pointer;
-  }
-  .title-btn:hover { background: #a1bdd914; }
-
-  .title-input {
-    width: 100%;
-    padding: 4px 8px;
-    margin-left: -6px;
-    border: 2px solid #579dff;
-    border-radius: 6px;
-    background: #22272b;
-    color: #b6c2cf;
-    font-size: 20px;
-    font-weight: 600;
-    line-height: 28px;
-  }
-
   .action-pills {
     display: flex;
     flex-wrap: wrap;
     gap: 8px;
-    margin-left: 28px;
+    margin-left: 0;
   }
 
   .pill-btn {
