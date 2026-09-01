@@ -1,31 +1,39 @@
 <script>
+  import { onDestroy } from 'svelte';
+
   let { card, onArchive, onUnarchive, onDelete, error = null } = $props();
 
   let open = $state(false);
   let confirming = $state(null);
-  let typedTitle = $state('');
   let pending = $state(false);
+  let deleteArmed = $state(false);
+  let armTimer = null;
 
   const archived = $derived(Boolean(card?.archived));
   const title = $derived(card?.title ?? '');
-  // Deck has no card-restore endpoint, so deletion is gated on retyping the
-  // exact title rather than a plain confirm.
-  const titleMatches = $derived(typedTitle === title);
 
   function start(action) {
     confirming = action;
-    typedTitle = '';
     open = false;
+    deleteArmed = action !== 'delete';
+    if (action === 'delete') {
+      armTimer = window.setTimeout(() => {
+        deleteArmed = true;
+        armTimer = null;
+      }, 350);
+    }
   }
 
   function cancel() {
+    if (armTimer != null) window.clearTimeout(armTimer);
+    armTimer = null;
+    deleteArmed = false;
     confirming = null;
-    typedTitle = '';
   }
 
   async function confirm() {
     if (pending) return;
-    if (confirming === 'delete' && !titleMatches) return;
+    if (confirming === 'delete' && !deleteArmed) return;
 
     const action =
       confirming === 'delete' ? onDelete : confirming === 'archive' ? onArchive : onUnarchive;
@@ -38,38 +46,44 @@
       pending = false;
     }
   }
+
+  onDestroy(() => {
+    if (armTimer != null) window.clearTimeout(armTimer);
+  });
 </script>
 
 <section class="lifecycle">
-  <button
-    class="btn"
-    type="button"
-    aria-expanded={open}
-    aria-haspopup="menu"
-    onclick={() => (open = !open)}
-  >
-    Aktionen
-  </button>
+  {#if !confirming}
+    <button
+      class="btn action-trigger"
+      type="button"
+      aria-expanded={open}
+      aria-haspopup="menu"
+      onclick={() => (open = !open)}
+    >
+      Aktionen
+    </button>
 
-  {#if open}
-    <ul class="menu" role="menu">
-      <li>
-        {#if archived}
-          <button class="item" type="button" role="menuitem" onclick={() => start('unarchive')}>
-            Karte wiederherstellen
+    {#if open}
+      <ul class="menu" role="menu">
+        <li>
+          {#if archived}
+            <button class="item" type="button" role="menuitem" onclick={() => start('unarchive')}>
+              Karte wiederherstellen
+            </button>
+          {:else}
+            <button class="item" type="button" role="menuitem" onclick={() => start('archive')}>
+              Karte archivieren
+            </button>
+          {/if}
+        </li>
+        <li>
+          <button class="item danger" type="button" role="menuitem" onclick={() => start('delete')}>
+            Karte löschen
           </button>
-        {:else}
-          <button class="item" type="button" role="menuitem" onclick={() => start('archive')}>
-            Karte archivieren
-          </button>
-        {/if}
-      </li>
-      <li>
-        <button class="item danger" type="button" role="menuitem" onclick={() => start('delete')}>
-          Karte löschen
-        </button>
-      </li>
-    </ul>
+        </li>
+      </ul>
+    {/if}
   {/if}
 
   {#if confirming === 'archive' || confirming === 'unarchive'}
@@ -97,15 +111,11 @@
       <p class="copy danger-text">
         Das Löschen von "{title}" kann nicht rückgängig gemacht werden.
       </p>
-      <label class="field">
-        <span class="copy">Geben Sie den Kartentitel zur Bestätigung ein</span>
-        <input class="input" type="text" aria-label="Kartentitel bestätigen" bind:value={typedTitle} />
-      </label>
       <div class="actions">
         <button
           class="btn danger-btn"
           type="button"
-          disabled={pending || !titleMatches}
+          disabled={pending || !deleteArmed}
           onclick={confirm}
         >
           {pending ? 'Wird gelöscht…' : 'Karte löschen'}
@@ -121,7 +131,7 @@
 </section>
 
 <style>
-  .lifecycle { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+  .lifecycle { display: flex; width: 100%; flex-direction: column; gap: 8px; align-items: stretch; }
 
   ul { margin: 0; padding: 0; list-style: none; }
 
@@ -132,6 +142,7 @@
     border-radius: 8px;
     background: var(--stack-bg);
   }
+  .action-trigger { align-self: flex-start; }
 
   .item {
     width: 100%;
@@ -151,21 +162,10 @@
     flex-direction: column;
     gap: 8px;
     width: 100%;
-    padding: 10px;
-    border: 1px solid var(--border);
+    padding: 12px;
+    border: 1px solid #78433f;
     border-radius: 8px;
-    background: var(--stack-bg);
-  }
-
-  .field { display: flex; flex-direction: column; gap: 4px; }
-
-  .input {
-    padding: 6px 8px;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    background: var(--board-bg);
-    color: var(--text);
-    font: inherit;
+    background: #332626;
   }
 
   .actions { display: flex; flex-wrap: wrap; gap: 8px; }

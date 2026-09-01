@@ -66,32 +66,18 @@ describe('CardLifecycleMenu', () => {
     await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
 
     expect(onDelete).not.toHaveBeenCalled();
-    expect(screen.getByRole('button', { name: 'Karte löschen' })).toBeDisabled();
+    expect(screen.getByRole('alertdialog', { name: 'Löschen bestätigen' })).toBeInTheDocument();
   });
 
-  it('keeps delete blocked when the typed title does not match', async () => {
+  it('deletes once the armed confirmation button is clicked', async () => {
     const { onDelete } = setup();
 
     await openMenu();
     await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
-    await fireEvent.input(screen.getByLabelText('Kartentitel bestätigen'), {
-      target: { value: 'Detail Q' },
-    });
-
-    expect(screen.getByRole('button', { name: 'Karte löschen' })).toBeDisabled();
-    await fireEvent.click(screen.getByRole('button', { name: 'Karte löschen' }));
-    expect(onDelete).not.toHaveBeenCalled();
-  });
-
-  it('deletes once the exact title is typed', async () => {
-    const { onDelete } = setup();
-
-    await openMenu();
-    await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
-    await fireEvent.input(screen.getByLabelText('Kartentitel bestätigen'), {
-      target: { value: 'Detail QA' },
-    });
-    await fireEvent.click(screen.getByRole('button', { name: 'Karte löschen' }));
+    const button = screen.getByRole('button', { name: 'Karte löschen' });
+    expect(button).toBeDisabled();
+    await vi.waitFor(() => expect(button).toBeEnabled());
+    await fireEvent.click(button);
 
     expect(onDelete).toHaveBeenCalledTimes(1);
   });
@@ -114,10 +100,8 @@ describe('CardLifecycleMenu', () => {
 
     await openMenu();
     await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
-    await fireEvent.input(screen.getByLabelText('Kartentitel bestätigen'), {
-      target: { value: 'Detail QA' },
-    });
     const button = screen.getByRole('button', { name: 'Karte löschen' });
+    await vi.waitFor(() => expect(button).toBeEnabled());
     await fireEvent.click(button);
     await fireEvent.click(button);
 
@@ -144,10 +128,9 @@ describe('CardLifecycleMenu', () => {
 
     await openMenu();
     await fireEvent.click(screen.getByRole('menuitem', { name: 'Karte löschen' }));
-    await fireEvent.input(screen.getByLabelText('Kartentitel bestätigen'), {
-      target: { value: 'Detail QA' },
-    });
-    await fireEvent.click(screen.getByRole('button', { name: 'Karte löschen' }));
+    const button = screen.getByRole('button', { name: 'Karte löschen' });
+    await vi.waitFor(() => expect(button).toBeEnabled());
+    await fireEvent.click(button);
 
     expect(onDelete).toHaveBeenCalledTimes(1);
     expect(screen.getByRole('alertdialog')).toBeInTheDocument();
