@@ -10,6 +10,7 @@
     onClose,
     onRetry,
     onSave,
+    onRename,
     onDiscard,
     onUploadAttachment,
     onAttachLink,
@@ -25,13 +26,50 @@
   let toast = $state(null);
   let isDraggingOver = $state(false);
   let dragType = $state('file');
+  let editingTitle = $state(false);
+  let titleDraft = $state('');
+  let titleSave = $state(null);
   // Counts enter/leave pairs so crossing into a child element does not read as
   // leaving the modal. Never declared before, so every dragenter into the modal
   // threw ReferenceError and the drop handler never ran: dropping onto an open
   // card detail was broken outright, not merely mis-styled.
   let dragDepth = 0;
 
-  const titleId = 'card-detail-title';
+  function startTitleEdit() {
+    titleDraft = card?.title ?? '';
+    editingTitle = true;
+  }
+
+  async function commitTitle() {
+    if (titleSave) return titleSave;
+    if (!editingTitle) return true;
+    const title = titleDraft.trim();
+    editingTitle = false;
+    if (!title || title === card?.title) return true;
+
+    titleSave = Promise.resolve(onRename?.({ title }))
+      .then((saved) => saved !== false && saved != null)
+      .catch(() => false)
+      .finally(() => { titleSave = null; });
+    return titleSave;
+  }
+
+  function cancelTitleEdit() {
+    editingTitle = false;
+    titleDraft = '';
+  }
+
+  function onTitleKeydown(event) {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      event.stopPropagation();
+      commitTitle();
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelTitleEdit();
+    }
+  }
 
   // Captured at creation rather than at close time: by then focus has already
   // moved into the dialog, so activeElement would name a node about to vanish.
@@ -60,7 +98,11 @@
     };
   });
 
-  function requestClose() {
+  async function requestClose() {
+    if (editingTitle || titleSave) {
+      const saved = await commitTitle();
+      if (!saved) return;
+    }
     if (dirty) {
       confirming = true;
       return;
@@ -263,7 +305,7 @@
     class="dialog"
     role="dialog"
     aria-modal="true"
-    aria-labelledby={titleId}
+    aria-label={card?.title ?? 'Karte'}
     aria-busy={loading}
     tabindex="-1"
     bind:this={dialog}
@@ -279,7 +321,28 @@
       </div>
     {/if}
     <header class="head">
-      <h2 class="title" id={titleId}>{card?.title ?? 'Card'}</h2>
+      <h2 class="title">
+        {#if editingTitle}
+          <!-- svelte-ignore a11y_autofocus -->
+          <input
+            class="title-input"
+            type="text"
+            aria-label="Kartentitel"
+            bind:value={titleDraft}
+            onkeydown={onTitleKeydown}
+            onblur={commitTitle}
+            autofocus
+          />
+        {:else}
+          <button class="title-button" type="button" onclick={startTitleEdit} title="Titel bearbeiten">
+            {card?.title ?? 'Karte'}
+            <svg class="edit-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
+              <path d="m3 11-.5 2.5L5 13l7.2-7.2-2-2L3 11Z" />
+              <path d="m9.5 4.5 2 2" />
+            </svg>
+          </button>
+        {/if}
+      </h2>
       <button class="icon" type="button" onclick={requestClose} aria-label="Kartendetails schließen">
         <svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true">
           <path d="M4 4l8 8M12 4l-8 8" />
@@ -335,15 +398,20 @@
     /* Trello anchors the card dialog near the top rather than centring it, so
        long cards grow downward instead of jumping as content loads. */
     align-items: flex-start;
-    padding: 48px 16px;
-    overflow-y: auto;
+    padding: 28px 16px;
+    overflow: hidden;
     background: rgba(0, 0, 0, 0.75);
     backdrop-filter: blur(4px);
   }
 
   .dialog {
+    position: relative;
+    display: flex;
+    max-height: calc(100dvh - 56px);
+    flex-direction: column;
     width: 100%;
-    max-width: 768px;
+    max-width: 1040px;
+    overflow: hidden;
     background: #282e33;
     border-radius: 12px;
     box-shadow: 0 12px 32px rgba(0, 0, 0, 0.65);
@@ -355,15 +423,55 @@
     display: flex;
     align-items: flex-start;
     gap: 8px;
-    padding: 16px 16px 8px;
+    padding: 20px 24px 14px;
+    border-bottom: 1px solid #38414a80;
   }
 
   .title {
     flex: 1;
     margin: 0;
-    font-size: 18px;
-    line-height: 24px;
+    min-width: 0;
+    font-size: 20px;
+    line-height: 28px;
     word-break: break-word;
+  }
+
+  .title-button {
+    display: flex;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border: 0;
+    border-radius: 6px;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    text-align: left;
+    cursor: text;
+  }
+  .title-button:hover { background: #a1bdd914; }
+  .title-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .edit-icon { flex: 0 0 auto; opacity: 0; color: var(--text-dim); transition: opacity 120ms ease; }
+  .title-button:hover .edit-icon, .title-button:focus-visible .edit-icon { opacity: 1; }
+
+  .title-input {
+    width: 100%;
+    min-width: 0;
+    padding: 4px 8px;
+    margin: -4px -8px;
+    border: 2px solid var(--accent);
+    border-radius: 6px;
+    background: #22272b;
+    color: var(--text);
+    font: inherit;
+    font-weight: inherit;
+    line-height: inherit;
+    outline: none;
   }
 
   .icon {
@@ -381,13 +489,27 @@
   }
   .icon:hover { background: var(--card-bg-hover); color: var(--text); }
 
-  .body { padding: 8px 16px 16px; }
+  .body {
+    min-height: 0;
+    padding: 20px 24px 24px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
 
-  .columns { display: grid; grid-template-columns: 1fr; gap: 16px; }
-  @media (min-width: 640px) {
-    .columns { grid-template-columns: minmax(0, 1fr) 200px; }
+  .columns { display: grid; grid-template-columns: 1fr; gap: 24px; }
+  @media (min-width: 760px) {
+    .columns { grid-template-columns: minmax(0, 1fr) minmax(240px, 280px); gap: 32px; }
   }
   .col { min-width: 0; }
+  .side { display: flex; flex-direction: column; gap: 24px; }
+
+  @media (max-width: 759px) {
+    .backdrop { padding: 12px; }
+    .dialog { max-height: calc(100dvh - 24px); }
+    .head { padding: 16px 18px 12px; }
+    .body { padding: 18px; }
+    .side { padding-top: 20px; border-top: 1px solid var(--border); }
+  }
 
   .error { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; }
   .message { margin: 0; color: var(--text-dim); }

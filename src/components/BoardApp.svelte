@@ -279,6 +279,18 @@
     return saved;
   }
 
+  async function saveDetailTitle(changes) {
+    const saved = await detail.saveCore(changes);
+    if (saved) {
+      try {
+        await syncBoardDates();
+      } catch (caught) {
+        tileToast = { status: 'error', message: `Deck gespeichert; Kalender-Sync ausstehend: ${caught?.message ?? 'Fehler'}` };
+      }
+    }
+    return saved;
+  }
+
   function loadAssignmentOptions(b) {
     assignmentOptions = boardAssignmentOptions(b);
   }
@@ -459,6 +471,7 @@
       onClose={detail.requestClose}
       onRetry={detail.refreshCard}
       onSave={detail.saveCore}
+      onRename={saveDetailTitle}
       onDiscard={detail.discardDraft}
       onUploadAttachment={detail.addAttachment}
       onAttachLink={detail.addLink}

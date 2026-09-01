@@ -15,6 +15,94 @@ describe('CardDetailModal', () => {
     const dialog = screen.getByRole('dialog');
     expect(dialog).toHaveAttribute('aria-modal', 'true');
     expect(dialog).toHaveAccessibleName('Detail QA');
+    expect(screen.getAllByText('Detail QA')).toHaveLength(1);
+  });
+
+  it('edits the single visible header title on Enter', async () => {
+    const onRename = vi.fn().mockResolvedValue(true);
+    open({ onRename });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Detail QA' }));
+    const input = screen.getByLabelText('Kartentitel');
+    await fireEvent.input(input, { target: { value: 'Renamed card' } });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onRename).toHaveBeenCalledWith({ title: 'Renamed card' });
+  });
+
+  it('saves the header title on blur and cancels it on Escape', async () => {
+    const onRename = vi.fn().mockResolvedValue(true);
+    open({ onRename });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Detail QA' }));
+    let input = screen.getByLabelText('Kartentitel');
+    await fireEvent.input(input, { target: { value: 'Blurred title' } });
+    await fireEvent.blur(input);
+    expect(onRename).toHaveBeenCalledWith({ title: 'Blurred title' });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Detail QA' }));
+    input = screen.getByLabelText('Kartentitel');
+    await fireEvent.input(input, { target: { value: 'Discarded' } });
+    await fireEvent.keyDown(input, { key: 'Escape' });
+    expect(onRename).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole('button', { name: 'Detail QA' })).toBeInTheDocument();
+  });
+
+  it('silently restores the current title instead of saving whitespace', async () => {
+    const onRename = vi.fn();
+    open({ onRename });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Detail QA' }));
+    const input = screen.getByLabelText('Kartentitel');
+    await fireEvent.input(input, { target: { value: '   ' } });
+    await fireEvent.keyDown(input, { key: 'Enter' });
+
+    expect(onRename).not.toHaveBeenCalled();
+    expect(screen.getByRole('button', { name: 'Detail QA' })).toBeInTheDocument();
+  });
+
+  it('saves a title draft before a backdrop close instead of discarding it', async () => {
+    let finishRename;
+    const onRename = vi.fn(() => new Promise((resolve) => { finishRename = resolve; }));
+    const onClose = vi.fn();
+    const { container } = open({ onRename, onClose });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Detail QA' }));
+    await fireEvent.input(screen.getByLabelText('Kartentitel'), { target: { value: 'Keep this title' } });
+    await fireEvent.pointerDown(container.querySelector('.backdrop'));
+
+    expect(onRename).toHaveBeenCalledWith({ title: 'Keep this title' });
+    expect(onClose).not.toHaveBeenCalled();
+    finishRename({ title: 'Keep this title' });
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+  });
+
+  it('awaits a title save before the close button dismisses the modal', async () => {
+    const onRename = vi.fn().mockResolvedValue({ title: 'Saved by close' });
+    const onClose = vi.fn();
+    open({ onRename, onClose });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Detail QA' }));
+    await fireEvent.input(screen.getByLabelText('Kartentitel'), { target: { value: 'Saved by close' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Kartendetails schließen' }));
+
+    await vi.waitFor(() => expect(onClose).toHaveBeenCalledOnce());
+    expect(onRename).toHaveBeenCalledOnce();
+    expect(screen.queryByText('Sie haben ungespeicherte Änderungen.')).not.toBeInTheDocument();
+  });
+
+  it('keeps the modal open and contains rename failures', async () => {
+    const onRename = vi.fn().mockRejectedValue(new Error('write exploded'));
+    const onClose = vi.fn();
+    open({ onRename, onClose });
+
+    await fireEvent.click(screen.getByRole('button', { name: 'Detail QA' }));
+    await fireEvent.input(screen.getByLabelText('Kartentitel'), { target: { value: 'Failed title' } });
+    await fireEvent.click(screen.getByRole('button', { name: 'Kartendetails schließen' }));
+
+    await vi.waitFor(() => expect(onRename).toHaveBeenCalledOnce());
+    expect(onClose).not.toHaveBeenCalled();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 
   it('locks body scroll while open and restores it on close', () => {
