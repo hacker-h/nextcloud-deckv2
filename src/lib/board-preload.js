@@ -17,10 +17,46 @@ export function boardPreloadOrder(boards, activeId, mru = []) {
     });
 }
 
-export async function preloadBoards({ boards, activeId, mru, idle, shouldContinue, preload, limit = 50 }) {
-  for (const board of boardPreloadOrder(boards, activeId, mru).slice(0, limit)) {
-    await idle();
-    if (!shouldContinue()) return;
-    await preload(board.id);
+// A pool rather than one sequential chain: preloading 17 boards one round-trip
+// at a time cost 4.6s of wall clock for work the browser is happy to overlap.
+// Workers pull from the front of the same priority-ordered queue, so MRU and
+// small-first still win the first network slots — only the tail overlaps.
+//
+// Six is measured, not guessed: against a real Nextcloud, 17 boards took 4.6s
+// serially, 2.5s at four workers and 1.4s at six, but 1.8s at eight — past six
+// the server contends with itself and the extra parallelism costs time. It is
+// also the bound `moveCards` already uses for the same reason.
+export async function preloadBoards({
+  boards,
+  activeId,
+  mru,
+  idle,
+  shouldContinue,
+  preload,
+  limit = 50,
+  concurrency = 6,
+  onProgress,
+}) {
+  const queue = boardPreloadOrder(boards, activeId, mru).slice(0, limit);
+  const total = queue.length;
+  if (!total) return;
+
+  let next = 0;
+  let done = 0;
+  onProgress?.({ done, total });
+
+  async function worker() {
+    // `next` is read and advanced without an await between, so workers never
+    // claim the same board despite sharing the queue.
+    while (next < total) {
+      const board = queue[next++];
+      await idle();
+      if (!shouldContinue()) return;
+      const stacks = await preload(board.id);
+      done += 1;
+      onProgress?.({ done, total, boardId: board.id, status: stacks == null ? 'failed' : 'loaded' });
+    }
   }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, total) }, worker));
 }

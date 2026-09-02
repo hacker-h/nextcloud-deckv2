@@ -93,3 +93,52 @@ describe('BoardApp account header', () => {
     expect(await screen.findByText('Edit')).toBeInTheDocument();
   });
 });
+
+describe('BoardApp preload progress', () => {
+  // Three boards means two background preloads behind the active one; holding
+  // the second open keeps the indicator on screen long enough to assert it.
+  function mockSlowPreload() {
+    const boards = [1, 2, 3].map((id) => ({ ...manageBoard, id, title: `Board ${id}` }));
+    let releaseLast = () => {};
+    const held = new Promise((resolve) => { releaseLast = () => resolve(json([])); });
+    let stackRequests = 0;
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
+      if (String(url).includes('/boards?')) return Promise.resolve(json(boards));
+      if (/\/boards\/\d+\/stacks$/.test(String(url))) {
+        stackRequests += 1;
+        return stackRequests > 2 ? held : Promise.resolve(json([]));
+      }
+      return Promise.resolve(json({}));
+    });
+
+    return { releaseLast };
+  }
+
+  it('shows background preload progress and hides it once the queue drains', async () => {
+    const { releaseLast } = mockSlowPreload();
+
+    render(BoardApp, { props: { currentUser: 'alice' } });
+
+    // The bar appears at 0/2 the moment the queue is known, then counts up.
+    const bar = await screen.findByRole('progressbar');
+    expect(bar).toHaveAttribute('aria-valuemin', '0');
+    expect(bar).toHaveAttribute('aria-valuemax', '2');
+    await waitFor(() => expect(bar).toHaveAttribute('aria-valuenow', '1'));
+    expect(bar).toHaveAttribute('aria-valuetext', '1 von 2 Boards geladen');
+    expect(screen.getByText('1/2')).toBeInTheDocument();
+
+    releaseLast();
+
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+  });
+
+  it('renders no progress indicator when there is nothing to preload', async () => {
+    mockBoardFetch(manageBoard);
+
+    render(BoardApp, { props: { currentUser: 'alice' } });
+
+    expect(await screen.findByText('Manage board')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
+  });
+});

@@ -110,6 +110,8 @@
   // scramble real data. Set VITE_BOARD_ID to override.
   const preferredBoardId = Number(import.meta.env.VITE_BOARD_ID) || null;
   let preloadToken = 0;
+  // Null once the queue is drained, so the indicator disappears on its own.
+  let preloadProgress = $state(null);
   onDestroy(() => { preloadToken += 1; });
 
   const idle = () => new Promise((resolve) => {
@@ -130,12 +132,19 @@
         navigator.connection?.saveData
       ),
       preload: board.preload,
+      onProgress: ({ done, total }) => {
+        // A stale run must not repaint the bar for the board we just left.
+        if (token !== preloadToken) return;
+        preloadProgress = done < total ? { done, total } : null;
+      },
     });
+    if (token === preloadToken) preloadProgress = null;
   }
 
   async function openBoard(b) {
     if (!b) return;
     const token = ++preloadToken;
+    preloadProgress = null;
     current = b;
     touch(b.id);
     loadAssignmentOptions(b);
@@ -368,6 +377,25 @@
           {board.state.pending} wird gespeichert…
         </span>
       {/if}
+      {#if preloadProgress}
+        <div
+          class="preload"
+          role="progressbar"
+          aria-valuemin="0"
+          aria-valuemax={preloadProgress.total}
+          aria-valuenow={preloadProgress.done}
+          aria-valuetext={`${preloadProgress.done} von ${preloadProgress.total} Boards geladen`}
+          title={`${preloadProgress.done} von ${preloadProgress.total} Boards im Hintergrund geladen`}
+        >
+          <span class="preload-text">{preloadProgress.done}/{preloadProgress.total}</span>
+          <span class="preload-track">
+            <span
+              class="preload-fill"
+              style={`width: ${Math.round((preloadProgress.done / preloadProgress.total) * 100)}%;`}
+            ></span>
+          </span>
+        </div>
+      {/if}
       <span class="build" title={`Erstellt am ${__BUILD_TIME__}`}>v{__APP_VERSION__} ({__BUILD_SHA__})</span>
       <!-- Plain text beats an avatar menu here: the topbar is dense, and one action
         does not justify hiding the signed-in username behind another interaction. -->
@@ -592,6 +620,29 @@
   .build { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .current-access { flex: 0 0 auto; }
   .pending { font-size: 12px; color: var(--accent); }
+
+  /* Sits in the topbar's background-activity slot next to .pending: the board
+     stays interactive while the rest of the boards stream in behind it. */
+  .preload { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+  .preload-text {
+    font-size: 12px;
+    color: var(--text-dim);
+    font-variant-numeric: tabular-nums;
+  }
+  .preload-track {
+    width: 56px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--border);
+    overflow: hidden;
+  }
+  .preload-fill {
+    display: block;
+    height: 100%;
+    border-radius: 2px;
+    background: var(--accent);
+    transition: width .3s ease;
+  }
 
   .account {
     display: flex;
