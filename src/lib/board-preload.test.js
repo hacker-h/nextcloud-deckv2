@@ -89,15 +89,66 @@ describe('board preload ordering', () => {
       shouldContinue: () => true,
       concurrency: 1,
       preload: async (id) => (id === 4 ? null : []),
-      onProgress: (event) => events.push(event),
+      onProgress: (event) => events.push({ done: event.done, total: event.total, boardId: event.boardId, status: event.status }),
     });
 
     expect(events).toEqual([
-      { done: 0, total: 3 },
+      { done: 0, total: 3, boardId: undefined, status: undefined },
+      { done: 0, total: 3, boardId: 3, status: 'loading' },
       { done: 1, total: 3, boardId: 3, status: 'loaded' },
+      { done: 1, total: 3, boardId: 2, status: 'loading' },
       { done: 2, total: 3, boardId: 2, status: 'loaded' },
+      { done: 2, total: 3, boardId: 4, status: 'loading' },
       { done: 3, total: 3, boardId: 4, status: 'failed' },
     ]);
+  });
+
+  it('accumulates stack and card counts from the boards that actually arrive', async () => {
+    const events = [];
+    const stacksFor = {
+      3: [{ cards: [{}, {}] }, { cards: [{}] }],
+      2: [{ cards: [] }],
+      4: null,
+    };
+
+    await preloadBoards({
+      boards,
+      activeId: 1,
+      mru: ['3'],
+      idle: async () => {},
+      shouldContinue: () => true,
+      concurrency: 1,
+      preload: async (id) => stacksFor[id],
+      onProgress: (event) => events.push(event),
+    });
+
+    // Board 4 failed, so it contributes nothing - a running total must only
+    // count what really arrived.
+    expect(events.at(-1)).toMatchObject({ done: 3, total: 3, stacks: 3, cards: 3 });
+  });
+
+  it('names the boards currently in flight so the UI can say what is loading', async () => {
+    const titled = [
+      { id: 1 },
+      { id: 2, title: 'Alpha', stacks: [{}] },
+      { id: 3, title: 'Beta', stacks: [{}, {}] },
+    ];
+    const seen = [];
+
+    await preloadBoards({
+      boards: titled,
+      activeId: 1,
+      idle: async () => {},
+      shouldContinue: () => true,
+      concurrency: 2,
+      preload: async () => [],
+      onProgress: (event) => seen.push([...event.loading]),
+    });
+
+    expect(seen.some((names) => names.includes('Alpha'))).toBe(true);
+    expect(seen.some((names) => names.includes('Beta'))).toBe(true);
+    // Drained: nothing is still claimed as loading once the pool finishes.
+    expect(seen.at(-1)).toEqual([]);
   });
 
   it('reports no progress when every board is already active', async () => {

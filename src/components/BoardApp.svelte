@@ -13,7 +13,7 @@
   import { withoutInbox, readCollapsed, writeCollapsed } from '../lib/inbox.js';
   import { CalendarClient, applyCalendarPulls, calendarEntries } from '../lib/calendar.js';
   import { createCard } from '../lib/cards.js';
-  import { preloadBoards } from '../lib/board-preload.js';
+  import { preloadBoards, PRELOAD_LIMIT } from '../lib/board-preload.js';
   import Board from './Board.svelte';
   import InboxPanel from './InboxPanel.svelte';
   import BoardSwitcher from './BoardSwitcher.svelte';
@@ -26,6 +26,7 @@
   import CardAttachments from './CardAttachments.svelte';
   import CardLifecycleMenu from './CardLifecycleMenu.svelte';
   import Toast from './Toast.svelte';
+  import LoadProgress from './LoadProgress.svelte';
   import Planner from './Planner.svelte';
 
   let { currentUser, onSignOut = () => {}, onUnauthorized = () => {} } = $props();
@@ -112,7 +113,89 @@
   let preloadToken = 0;
   // Null once the queue is drained, so the indicator disappears on its own.
   let preloadProgress = $state(null);
+  // 'boards' while the board list itself is in flight, 'board' while the board
+  // the user is looking at loads, null when nothing is outstanding. The first
+  // phase used to be entirely silent: the app rendered an empty shell with no
+  // statement of what it was waiting for.
+  let loadPhase = $state('boards');
   onDestroy(() => { preloadToken += 1; });
+
+  function nowMs() {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
+
+  // Two clocks, because they answer two different questions. The active one is
+  // "how long have I been staring at this board" and restarts on every switch;
+  // the total one is "how long has the app been loading anything at all" and
+  // keeps running behind a board that has already painted. Sharing one clock
+  // froze the aggregate's duration the moment the active board finished.
+  let phaseStartedAt = $state(nowMs());
+  let phaseElapsed = $state(0);
+  let totalStartedAt = $state(nowMs());
+  let totalElapsed = $state(0);
+
+  function beginPhase(phase) {
+    loadPhase = phase;
+    phaseStartedAt = nowMs();
+    phaseElapsed = 0;
+  }
+
+  // The cleanup runs on every phase change, so an abandoned board switch cannot
+  // leave a timer running.
+  $effect(() => {
+    if (!loadPhase) return;
+    const started = phaseStartedAt;
+    const tick = () => { phaseElapsed = nowMs() - started; };
+    const id = setInterval(tick, 200);
+    tick();
+    return () => clearInterval(id);
+  });
+
+  $effect(() => {
+    if (!showAggregate) return;
+    const started = totalStartedAt;
+    const tick = () => { totalElapsed = nowMs() - started; };
+    const id = setInterval(tick, 200);
+    tick();
+    return () => clearInterval(id);
+  });
+
+  const seconds = (ms) => `${(ms / 1000).toFixed(1)} s`;
+
+  // Cards are a running total, never a fraction. `/boards?details=1` returns
+  // each board's stacks but zero cards, so there is no honest denominator to
+  // count towards until every board has actually been fetched - a bar claiming
+  // "600 of 3000" would be inventing the 3000.
+  const preloaded = $derived(preloadProgress ?? { done: 0, total: 0, cards: 0, stacks: 0, loading: [] });
+  // The active board plus the preload queue. Capped the same way the scheduler
+  // caps itself, so the denominator matches the work that will really happen.
+  const boardsTotal = $derived(Math.min(boards.length, PRELOAD_LIMIT + 1));
+  const boardsDone = $derived(preloaded.done + (loadPhase ? 0 : 1));
+  const totalCards = $derived(preloaded.cards + cardCount);
+  const totalStacks = $derived(preloaded.stacks + stacks.length);
+  const showAggregate = $derived(Boolean(loadPhase) || preloadProgress !== null);
+
+  // Named so both bars are distinguishable to a screen reader and to the tests.
+  const AGGREGATE_LABEL = 'Ladefortschritt aller Boards';
+  const ACTIVE_LABEL = 'Ladefortschritt des aktuellen Boards';
+
+  // Six workers means six titles at once, which is more than the panel can show
+  // legibly - name two and count the rest.
+  const loadingNames = $derived.by(() => {
+    const names = preloaded.loading;
+    if (!names.length) return loadPhase ? (current?.title ?? 'Boardliste') : '—';
+    return names.length <= 2
+      ? names.join(', ')
+      : `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
+  });
+
+  const activeLoad = $derived(
+    loadPhase === 'boards'
+      ? { text: 'Boardliste wird geladen…', board: '—' }
+      : loadPhase === 'board' && loading
+        ? { text: `„${current?.title ?? 'Board'}“ wird geladen…`, board: current?.title ?? '—' }
+        : null
+  );
 
   const idle = () => new Promise((resolve) => {
     if ('requestIdleCallback' in window) window.requestIdleCallback(resolve, { timeout: 1000 });
@@ -132,10 +215,10 @@
         navigator.connection?.saveData
       ),
       preload: board.preload,
-      onProgress: ({ done, total }) => {
+      onProgress: (event) => {
         // A stale run must not repaint the bar for the board we just left.
         if (token !== preloadToken) return;
-        preloadProgress = done < total ? { done, total } : null;
+        preloadProgress = event.done < event.total ? event : null;
       },
     });
     if (token === preloadToken) preloadProgress = null;
@@ -148,7 +231,15 @@
     current = b;
     touch(b.id);
     loadAssignmentOptions(b);
-    await board.load(b.id);
+    beginPhase('board');
+    // The background pool is started only after the active board resolves. Six
+    // workers racing it for connections is exactly what made the board the user
+    // is looking at finish last; the user asked for the opposite.
+    try {
+      await board.load(b.id);
+    } finally {
+      if (token === preloadToken) loadPhase = null;
+    }
     if (token === preloadToken) void preloadInBackground(b.id, token);
   }
 
@@ -326,6 +417,7 @@
   }
 
   async function init() {
+    beginPhase('boards');
     try {
       const list = await loadBoards();
       const preferred = list.find((b) => b.id === preferredBoardId);
@@ -345,6 +437,7 @@
     } catch (e) {
       board.state.error = e.message;
       board.state.loading = false;
+      loadPhase = null;
     }
   }
 
@@ -377,24 +470,23 @@
           {board.state.pending} wird gespeichert…
         </span>
       {/if}
-      {#if preloadProgress}
-        <div
-          class="preload"
-          role="progressbar"
-          aria-valuemin="0"
-          aria-valuemax={preloadProgress.total}
-          aria-valuenow={preloadProgress.done}
-          aria-valuetext={`${preloadProgress.done} von ${preloadProgress.total} Boards geladen`}
-          title={`${preloadProgress.done} von ${preloadProgress.total} Boards im Hintergrund geladen`}
-        >
-          <span class="preload-text">{preloadProgress.done}/{preloadProgress.total}</span>
-          <span class="preload-track">
-            <span
-              class="preload-fill"
-              style={`width: ${Math.round((preloadProgress.done / preloadProgress.total) * 100)}%;`}
-            ></span>
-          </span>
-        </div>
+      {#if showAggregate}
+        <LoadProgress
+          label={AGGREGATE_LABEL}
+          done={boardsDone}
+          total={boardsTotal}
+          text={boardsTotal ? `${boardsDone}/${boardsTotal}` : '…'}
+          valuetext={boardsTotal
+            ? `${boardsDone} von ${boardsTotal} Boards geladen`
+            : 'Boardliste wird geladen…'}
+          details={[
+            { term: 'Boards geladen', value: boardsTotal ? `${boardsDone} von ${boardsTotal}` : '—' },
+            { term: 'Listen geladen', value: String(totalStacks) },
+            { term: 'Karten geladen', value: String(totalCards) },
+            { term: 'Lädt gerade', value: loadingNames },
+            { term: 'Dauer', value: seconds(totalElapsed) },
+          ]}
+        />
       {/if}
       <span class="build" title={`Erstellt am ${__BUILD_TIME__}`}>v{__APP_VERSION__} ({__BUILD_SHA__})</span>
       <!-- Plain text beats an avatar menu here: the topbar is dense, and one action
@@ -405,6 +497,27 @@
         <button class="signout" type="button" onclick={() => onSignOut()}>Abmelden</button>
       </div>
     </header>
+
+    {#if activeLoad}
+      <!-- Under the topbar rather than inside it: this one is about the board
+        the user is looking at, so it belongs with the board, and it names the
+        board so a slow switch is never ambiguous about what is being fetched. -->
+      <div class="active-load" role="status" aria-live="polite">
+        <LoadProgress
+          wide
+          indeterminate
+          label={ACTIVE_LABEL}
+          text={activeLoad.text}
+          valuetext={activeLoad.text}
+          details={[
+            { term: 'Board', value: activeLoad.board },
+            { term: 'Dauer', value: seconds(phaseElapsed) },
+            { term: 'Karten geladen', value: String(totalCards) },
+          ]}
+        />
+        <span class="active-load-time">{seconds(phaseElapsed)}</span>
+      </div>
+    {/if}
 
     {#if error}
       <div class="state">
@@ -621,27 +734,26 @@
   .current-access { flex: 0 0 auto; }
   .pending { font-size: 12px; color: var(--accent); }
 
-  /* Sits in the topbar's background-activity slot next to .pending: the board
-     stays interactive while the rest of the boards stream in behind it. */
-  .preload { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
-  .preload-text {
+  /* Full-width strip directly beneath the topbar. It replaces nothing - the
+     skeletons still render below it - so the board never looks blocked while
+     still saying out loud what is being fetched and for how long. */
+  .active-load {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 0 0 auto;
+    padding: 6px 12px;
+    background: rgba(0, 0, 0, .18);
+    border-bottom: 1px solid rgba(255, 255, 255, .06);
+    /* Above the board content, below the topbar's switcher menu. */
+    position: relative;
+    z-index: 20;
+  }
+  .active-load-time {
+    flex: 0 0 auto;
     font-size: 12px;
     color: var(--text-dim);
     font-variant-numeric: tabular-nums;
-  }
-  .preload-track {
-    width: 56px;
-    height: 4px;
-    border-radius: 2px;
-    background: var(--border);
-    overflow: hidden;
-  }
-  .preload-fill {
-    display: block;
-    height: 100%;
-    border-radius: 2px;
-    background: var(--accent);
-    transition: width .3s ease;
   }
 
   .account {

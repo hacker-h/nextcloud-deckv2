@@ -1,3 +1,8 @@
+// Matches the board store's cache capacity: preloading past it would evict the
+// boards we just fetched. Exported so the progress UI can size the total the
+// same way the scheduler does.
+export const PRELOAD_LIMIT = 50;
+
 export function boardPreloadOrder(boards, activeId, mru = []) {
   const rank = new Map(mru.map((id, index) => [String(id), index]));
   return boards
@@ -33,7 +38,7 @@ export async function preloadBoards({
   idle,
   shouldContinue,
   preload,
-  limit = 50,
+  limit = PRELOAD_LIMIT,
   concurrency = 6,
   onProgress,
 }) {
@@ -43,7 +48,24 @@ export async function preloadBoards({
 
   let next = 0;
   let done = 0;
-  onProgress?.({ done, total });
+  // Deck's `/boards?details=1` payload carries stacks but no cards, so the card
+  // total is unknowable before every board has been fetched. These are running
+  // sums of what has actually arrived, never a denominator - a progress panel
+  // that invented "of 3000" would be guessing at the user.
+  let cards = 0;
+  let stacks = 0;
+  const loading = new Set();
+
+  const report = (extra) => onProgress?.({
+    done,
+    total,
+    cards,
+    stacks,
+    loading: [...loading],
+    ...extra,
+  });
+
+  report();
 
   async function worker() {
     // `next` is read and advanced without an await between, so workers never
@@ -52,9 +74,16 @@ export async function preloadBoards({
       const board = queue[next++];
       await idle();
       if (!shouldContinue()) return;
-      const stacks = await preload(board.id);
+      loading.add(board.title ?? String(board.id));
+      report({ boardId: board.id, title: board.title, status: 'loading' });
+      const loaded = await preload(board.id);
+      loading.delete(board.title ?? String(board.id));
       done += 1;
-      onProgress?.({ done, total, boardId: board.id, status: stacks == null ? 'failed' : 'loaded' });
+      if (loaded) {
+        stacks += loaded.length;
+        for (const stack of loaded) cards += stack.cards?.length ?? 0;
+      }
+      report({ boardId: board.id, title: board.title, status: loaded == null ? 'failed' : 'loaded' });
     }
   }
 

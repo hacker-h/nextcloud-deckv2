@@ -94,20 +94,21 @@ describe('BoardApp account header', () => {
   });
 });
 
-describe('BoardApp preload progress', () => {
+describe('BoardApp load progress', () => {
   // Three boards means two background preloads behind the active one; holding
-  // the second open keeps the indicator on screen long enough to assert it.
-  function mockSlowPreload() {
+  // the last open keeps the aggregate indicator on screen long enough to assert.
+  function mockSlowPreload({ holdActive = false } = {}) {
     const boards = [1, 2, 3].map((id) => ({ ...manageBoard, id, title: `Board ${id}` }));
     let releaseLast = () => {};
-    const held = new Promise((resolve) => { releaseLast = () => resolve(json([])); });
+    const held = new Promise((resolve) => { releaseLast = () => resolve(json([{ id: 9, cards: [{ id: 91 }, { id: 92 }] }])); });
     let stackRequests = 0;
+    const threshold = holdActive ? 0 : 2;
 
     vi.spyOn(globalThis, 'fetch').mockImplementation((url) => {
       if (String(url).includes('/boards?')) return Promise.resolve(json(boards));
       if (/\/boards\/\d+\/stacks$/.test(String(url))) {
         stackRequests += 1;
-        return stackRequests > 2 ? held : Promise.resolve(json([]));
+        return stackRequests > threshold ? held : Promise.resolve(json([{ id: 8, cards: [{ id: 81 }] }]));
       }
       return Promise.resolve(json({}));
     });
@@ -115,25 +116,74 @@ describe('BoardApp preload progress', () => {
     return { releaseLast };
   }
 
-  it('shows background preload progress and hides it once the queue drains', async () => {
+  const aggregate = () => screen.getByRole('progressbar', { name: 'Ladefortschritt aller Boards' });
+
+  it('reports the active board by name while it is still loading', async () => {
+    const { releaseLast } = mockSlowPreload({ holdActive: true });
+
+    render(BoardApp, { props: { currentUser: 'alice' } });
+
+    // The gap this closes: previously the app rendered bare skeletons here and
+    // said nothing at all about what it was fetching.
+    // The same bar covers the board-list phase first ("Boardliste wird
+    // geladen"), then names the board once there is one to name.
+    const bar = await screen.findByRole('progressbar', { name: 'Ladefortschritt des aktuellen Boards' });
+    await waitFor(() => expect(bar).toHaveAttribute('aria-valuetext', expect.stringContaining('Board 1')));
+    // Indeterminate: Deck returns a board's stacks in one request, so there is
+    // no honest fraction to report for the active board.
+    expect(bar).not.toHaveAttribute('aria-valuenow');
+
+    releaseLast();
+
+    await waitFor(() =>
+      expect(screen.queryByRole('progressbar', { name: 'Ladefortschritt des aktuellen Boards' })).not.toBeInTheDocument()
+    );
+  });
+
+  it('counts all boards in the topbar and hides the bar once the queue drains', async () => {
     const { releaseLast } = mockSlowPreload();
 
     render(BoardApp, { props: { currentUser: 'alice' } });
 
-    // The bar appears at 0/2 the moment the queue is known, then counts up.
-    const bar = await screen.findByRole('progressbar');
+    // Rendered from the first frame, before the board list has arrived, so the
+    // total starts unknown and fills in - never a silent shell.
+    const bar = await screen.findByRole('progressbar', { name: 'Ladefortschritt aller Boards' });
     expect(bar).toHaveAttribute('aria-valuemin', '0');
-    expect(bar).toHaveAttribute('aria-valuemax', '2');
-    await waitFor(() => expect(bar).toHaveAttribute('aria-valuenow', '1'));
-    expect(bar).toHaveAttribute('aria-valuetext', '1 von 2 Boards geladen');
-    expect(screen.getByText('1/2')).toBeInTheDocument();
+    // Three boards: the active one plus the two behind it.
+    await waitFor(() => expect(bar).toHaveAttribute('aria-valuemax', '3'));
+    await waitFor(() => expect(bar).toHaveAttribute('aria-valuenow', '2'));
+    expect(bar).toHaveAttribute('aria-valuetext', '2 von 3 Boards geladen');
+    expect(screen.getByText('2/3')).toBeInTheDocument();
 
     releaseLast();
 
     await waitFor(() => expect(screen.queryByRole('progressbar')).not.toBeInTheDocument());
   });
 
-  it('renders no progress indicator when there is nothing to preload', async () => {
+  it('reveals loaded card and list counts on hover', async () => {
+    mockSlowPreload();
+    const user = userEvent.setup();
+
+    render(BoardApp, { props: { currentUser: 'alice' } });
+
+    const bar = await screen.findByRole('progressbar', { name: 'Ladefortschritt aller Boards' });
+    await waitFor(() => expect(bar).toHaveAttribute('aria-valuenow', '2'));
+
+    await user.hover(aggregate());
+
+    const tip = await screen.findByRole('tooltip');
+    expect(tip).toBeVisible();
+    expect(tip).toHaveTextContent('Boards geladen');
+    // A running total, not a fraction: `details=1` carries no card counts, so
+    // the denominator is genuinely unknown until every board has arrived.
+    expect(tip).toHaveTextContent('Karten geladen');
+    expect(tip).toHaveTextContent('Listen geladen');
+
+    await user.unhover(aggregate());
+    await waitFor(() => expect(screen.queryByRole('tooltip')).not.toBeInTheDocument());
+  });
+
+  it('renders no progress indicator when there is nothing left to load', async () => {
     mockBoardFetch(manageBoard);
 
     render(BoardApp, { props: { currentUser: 'alice' } });
