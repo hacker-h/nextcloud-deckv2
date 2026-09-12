@@ -118,3 +118,11 @@ failed publish run, a revision mismatch, or a failed production smoke test.
 ## 📄 License
 
 MIT License. Free and open source software.
+
+### Verbindungsstatus
+
+Unten links zeigt ein kleiner Punkt die Verbindung an: grün bei erreichbarem
+Server, rot bei Offline- oder API-Verbindungsfehlern, grau während der ersten
+Prüfung. Der Tooltip benennt den Zustand. Alle 15 Sekunden und bei einer
+Wiederverbindung wird der App-Server erneut geprüft (maximal 5 Sekunden Wartezeit).
+Der Punkt bestätigt keine Speicherung einer einzelnen Änderung.

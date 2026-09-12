@@ -2,6 +2,7 @@
   import { createAuthStore } from './lib/auth.svelte.js';
   import LoginScreen from './components/LoginScreen.svelte';
   import BoardApp from './components/BoardApp.svelte';
+  import ConnectionStatus from './components/ConnectionStatus.svelte';
 
   let { auth = createAuthStore() } = $props();
 
@@ -37,6 +38,8 @@
     onCancel={auth.cancel}
   />
 {/if}
+
+<ConnectionStatus />
 
 <aside class="version-tag" title={`Erstellt am ${__BUILD_TIME__}`}>
   v{__APP_VERSION__} ({__BUILD_SHA__})

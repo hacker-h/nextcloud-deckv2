@@ -52,7 +52,7 @@ describe('App auth gate', () => {
 
     render(App, { props: { auth } });
 
-    expect(screen.getByRole('status')).toHaveTextContent(/Warte auf Ihre Bestätigung/i);
+    expect(screen.getByText(/Warte auf Ihre Bestätigung/i)).toBeInTheDocument();
   });
 
   it('shows BoardApp with the authenticated user', () => {

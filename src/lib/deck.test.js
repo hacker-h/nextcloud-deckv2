@@ -158,3 +158,23 @@ describe('DeckClient transport', () => {
     expect([...new Uint8Array(result.data)]).toEqual([1, 2, 3]);
   });
 });
+
+describe('connection status events', () => {
+  it('reports network failure and subsequent successful requests', async () => {
+    const dispatch = vi.spyOn(window, 'dispatchEvent');
+    vi.spyOn(globalThis, 'fetch')
+      .mockRejectedValueOnce(new TypeError('NetworkError'))
+      .mockResolvedValueOnce(json([]));
+    await expect(client().deck('/boards')).rejects.toThrow('NetworkError');
+    expect(dispatch.mock.calls.at(-1)[0].detail).toEqual({ online: false });
+    await client().deck('/boards');
+    expect(dispatch.mock.calls.at(-1)[0].detail).toEqual({ online: true });
+  });
+
+  it('does not treat an intentionally aborted request as offline', async () => {
+    const dispatch = vi.spyOn(window, 'dispatchEvent');
+    vi.spyOn(globalThis, 'fetch').mockRejectedValue(new DOMException('Cancelled', 'AbortError'));
+    await expect(client().deck('/boards')).rejects.toBeInstanceOf(DeckAbortError);
+    expect(dispatch).not.toHaveBeenCalled();
+  });
+});

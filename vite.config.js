@@ -10,6 +10,7 @@ export default defineConfig({
     proxy: {
       // Keep the browser's Host header so the backend's Origin CSRF check sees
       // http://localhost:5173 and accepts mutating requests through the dev proxy.
+      '/healthz': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/auth': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/api': { target: 'http://127.0.0.1:3000', changeOrigin: false },
     },

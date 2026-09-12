@@ -98,8 +98,11 @@ export class DeckClient {
       res = await fetch(prefix + path, init);
     } catch (err) {
       if (err?.name === 'AbortError') throw new DeckAbortError();
+      reportConnection(false);
       throw err;
     }
+
+    reportConnection(res.status < 500);
 
     // 304 has no body - must return before attempting to parse JSON.
     if (res.status === 304) return { notModified: true, etag };
@@ -218,3 +221,9 @@ async function readResponse(res, responseType) {
 // Ordering is assigned in store.svelte.js, which also knows which neighbours a
 // re-space made dirty and therefore have to be persisted too.
 export const ORDER_STEP = 65536;
+
+function reportConnection(online) {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('deck:connection', { detail: { online } }));
+  }
+}
