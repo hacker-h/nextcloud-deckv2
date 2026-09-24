@@ -12,7 +12,7 @@ import {
 
 export function createCardDetailStore(
   client,
-  { currentUser = null, onCard = () => {}, onRemoveCard = () => {} } = {},
+  { currentUser = null, onCard = () => {}, onRemoveCard = () => {}, onClose = () => {} } = {},
 ) {
   const s = $state({
     boardId: null,
@@ -145,6 +145,7 @@ export function createCardDetailStore(
     s.draftPending = null;
     s.closeBlocked = false;
     s.draft = {};
+    onClose();
     return true;
   }
 

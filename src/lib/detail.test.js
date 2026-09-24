@@ -461,3 +461,16 @@ describe('card detail store', () => {
     expect(synced).toHaveBeenCalledWith(expect.objectContaining({ id: 77, attachmentCount: 1 }));
   });
 });
+
+it('updates navigation only when a detail close actually succeeds', async () => {
+  const onClose = vi.fn();
+  const detail = createCardDetailStore(readyClient(), { onClose });
+  await detail.open({ boardId: 116, stackId: 9, cardId: 77 });
+  detail.setDraftPending({ description: 'Unsaved' });
+  expect(detail.requestClose()).toBe(false);
+  expect(onClose).not.toHaveBeenCalled();
+  detail.discardDraft();
+  expect(detail.requestClose()).toBe(true);
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(detail.state.cardId).toBeNull();
+});

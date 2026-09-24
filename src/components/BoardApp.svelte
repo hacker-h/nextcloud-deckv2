@@ -1,6 +1,7 @@
 <script>
   import { onDestroy } from 'svelte';
   import { ORDER_STEP } from '../../shared/ordering.js';
+  import { createCardNavigation } from '../lib/card-navigation.js';
   import { DeckClient } from '../lib/deck.js';
   import { createBoardStore } from '../lib/store.svelte.js';
   import { createCardDetailStore } from '../lib/detail.svelte.js';
@@ -78,8 +79,11 @@
     currentUser,
     onCard: (card) => board.replaceCard(card),
     onRemoveCard: (cardId) => board.removeCard(cardId),
+    onClose: () => routes.write(current?.id ?? inbox.state.board?.id, null, { replace: true }),
   });
 
+  let allBoards = [];
+  let detailModal = $state(null);
   let boards = $state([]);
   let current = $state(null);
   let assignmentOptions = $state({ labels: [], participants: [] });
@@ -102,6 +106,7 @@
   // place the user navigates to.
   async function loadBoards() {
     const { data } = await client.getBoards();
+    allBoards = data;
     boards = sortByMru(withoutInbox(data));
     inbox.init(data);
     return boards;
@@ -224,8 +229,9 @@
     if (token === preloadToken) preloadProgress = null;
   }
 
-  async function openBoard(b) {
+  async function openBoard(b, { updateUrl = true } = {}) {
     if (!b) return;
+    if (updateUrl) routes.write(b.id);
     const token = ++preloadToken;
     preloadProgress = null;
     current = b;
@@ -328,7 +334,7 @@
       stackCardIds: (stack?.cards ?? []).map((c) => c.id),
     });
     if (result.openDetail) {
-      detail.open({ boardId: current.id, stackId: card.stackId, cardId: card.id });
+      openDetail({ boardId: current.id, stackId: card.stackId, cardId: card.id });
     } else {
       selection = result.selection;
     }
@@ -342,14 +348,14 @@
       stackCardIds: (stack?.cards ?? []).map((c) => c.id),
     });
     if (result.openDetail) {
-      detail.open({ boardId: inbox.state.board.id, stackId: card.stackId, cardId: card.id });
+      openDetail({ boardId: inbox.state.board.id, stackId: card.stackId, cardId: card.id });
     } else {
       selection = result.selection;
     }
   }
 
   function handlePlannerOpen({ card }) {
-    detail.open({ boardId: current.id, stackId: card.stackId, cardId: card.id });
+    openDetail({ boardId: current.id, stackId: card.stackId, cardId: card.id });
   }
 
   async function syncBoardDates() {
@@ -416,15 +422,72 @@
     return { boardId: detail.state.boardId, stackId: detail.state.stackId, cardId: detail.state.cardId };
   }
 
+  function openDetail(target) {
+    routes.write(target.boardId, target.cardId);
+    loadAssignmentOptions(allBoards.find((b) => b.id === target.boardId) ?? current);
+    return detail.open(target);
+  }
+
+  async function applyRoute(route, isCurrent) {
+    tileToast = null;
+    const targetBoard = route
+      ? allBoards.find((b) => b.id === route.boardId)
+      : boards.find((b) => b.id === preferredBoardId) ?? boards[0];
+    if (!targetBoard) {
+      if (route) throw new Error('Das verlinkte Board ist nicht verfügbar oder nicht freigegeben.');
+      loadPhase = null;
+      board.state.loading = false;
+      return;
+    }
+    const isInbox = !boards.some((b) => b.id === targetBoard.id);
+    let targetStacks;
+    if (isInbox) {
+      if (!current && boards[0]) await openBoard(boards[0], { updateUrl: false });
+      if (!isCurrent()) return;
+      targetStacks = (await client.getStacks(targetBoard.id)).data;
+      inboxCollapsed = false;
+      loadPhase = null;
+      board.state.loading = false;
+    } else {
+      await openBoard(targetBoard, { updateUrl: false });
+      if (!isCurrent()) return;
+      if (board.state.error) throw new Error(board.state.error);
+      targetStacks = board.state.stacks;
+    }
+    if (!isCurrent()) return;
+    activeView = 'board';
+    clearSelection();
+    loadAssignmentOptions(targetBoard);
+    if (route?.cardId) {
+      const stack = targetStacks.find((s) => s.cards.some((c) => c.id === route.cardId));
+      if (!stack) throw new Error('Die verlinkte Karte wurde nicht gefunden. Sie wurde möglicherweise gelöscht oder in ein anderes Board verschoben.');
+      await detail.open({ boardId: targetBoard.id, stackId: stack.id, cardId: route.cardId });
+    } else if (!route) {
+      routes.write(targetBoard.id, null, { replace: true });
+    }
+  }
+
+  const routes = createCardNavigation({
+    apply: applyRoute,
+    requestClose: () => detail.state.cardId == null
+      ? true
+      : detailModal?.requestClose() ?? detail.requestClose(),
+    onError: (caught) => {
+      loadPhase = null;
+      board.state.loading = false;
+      tileToast = { status: 'error', message: caught.message };
+    },
+  });
+  onDestroy(() => routes.destroy());
+
   async function init() {
     beginPhase('boards');
     try {
-      const list = await loadBoards();
-      const preferred = list.find((b) => b.id === preferredBoardId);
+      await loadBoards();
       // The calendar probe is independent of the board payload, so it overlaps
       // the board load instead of adding a serial round-trip on a slow link.
       const calendarStatus = calendar.status().catch(() => null);
-      await openBoard(preferred ?? list[0]);
+      await routes.restore();
       const status = await calendarStatus;
       calendarReady = Boolean(status?.enabled && status?.connected);
       if (calendarReady) {
@@ -522,7 +585,7 @@
     {#if error}
       <div class="state">
         <p class="err">{error}</p>
-        <button class="retry" onclick={() => (current ? openBoard(current) : init())}>
+        <button class="retry" onclick={() => (current ? routes.restore() : init())}>
           Erneut versuchen
         </button>
       </div>
@@ -605,6 +668,7 @@
 
   {#if detail.state.cardId != null}
     <CardDetailModal
+      bind:this={detailModal}
       card={detail.state.card}
       loading={detail.state.loading}
       error={detail.state.error}

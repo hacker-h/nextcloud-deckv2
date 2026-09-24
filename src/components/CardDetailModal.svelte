@@ -99,16 +99,16 @@
     };
   });
 
-  async function requestClose() {
+  export async function requestClose() {
     if (editingTitle || titleSave) {
       const saved = await commitTitle();
-      if (!saved) return;
+      if (!saved) return false;
     }
     if (dirty) {
       confirming = true;
-      return;
+      return false;
     }
-    onClose?.();
+    return onClose?.() !== false;
   }
 
   function focusables() {

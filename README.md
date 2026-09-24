@@ -135,3 +135,15 @@ der Editor behält den Markdown-Quelltext bei. Links öffnen separat.
 Eingebettetes HTML wird als Text angezeigt. Normale Überschriften und Listen
 bleiben Bestandteil der Beschreibung; nur Aufgabenlisten werden als Checklisten
 ausgelesen.
+
+### Direkte Kartenlinks
+
+Beim Öffnen einer Karte erscheint ihre Adresse in der Browserleiste:
+`#/boards/BOARD_ID/cards/CARD_ID`. Den vollständigen Link kopieren, um die
+Karte direkt zu öffnen – auch nach Neuladen oder Anmeldung. Beim Schließen
+bleibt die Board-Adresse; Browser-Zurück und -Vorwärts öffnen bzw. schließen
+die Detailansicht. Ungespeicherte Änderungen werden dabei geschützt.
+
+Die Spalte wird beim Aufrufen ermittelt, deshalb bleiben Links nach einem
+Spaltenwechsel innerhalb desselben Boards gültig. Gelöschte, nicht freigegebene
+oder in ein anderes Board verschobene Karten zeigen eine verständliche Meldung.
