@@ -62,7 +62,8 @@ describe('CardCoreEditor', () => {
     setup({ card: { ...base, description: 'Line 1\n<b>not bold</b>' } });
 
     const desc = screen.getByTestId('description');
-    expect(desc.textContent).toBe('Line 1\n<b>not bold</b>');
+    expect(desc.querySelector('br')).not.toBeNull();
+    expect(desc.textContent).toContain('<b>not bold</b>');
     expect(desc.querySelector('b')).toBeNull();
     expect(desc.innerHTML).not.toContain('<b>');
   });
@@ -120,4 +121,36 @@ describe('CardCoreEditor', () => {
 
     expect(screen.getByText('Überfällig')).toBeInTheDocument();
   });
+});
+
+it('renders headings, paragraphs and lists and leaves the Markdown unchanged on Save', async () => {
+  const description = '## Rahmen\n\nEin **wichtiger** Absatz.\nZweite Zeile.\n\n- Erwachsene\n- Kinder\n\n1. Feldberg\n2. Oberstdorf';
+  const { onSave } = setup({ card: { ...base, description } });
+  const content = screen.getByTestId('description');
+  expect(content.querySelector('h2')).toHaveTextContent('Rahmen');
+  expect(content.querySelectorAll('ul > li')).toHaveLength(2);
+  expect(content.querySelectorAll('ol > li')).toHaveLength(2);
+  expect(content.querySelector('strong')).toHaveTextContent('wichtiger');
+  await fireEvent.click(screen.getByRole('button', { name: 'Beschreibung bearbeiten' }));
+  expect(screen.getByLabelText('Beschreibung der Karte')).toHaveValue(description);
+  await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+  expect(onSave).not.toHaveBeenCalled();
+});
+
+it('saves edited Markdown without flattening lists or whitespace', async () => {
+  const original = '## Rahmen\n\n- Erwachsene\n- Kinder';
+  const { onSave } = setup({ card: { ...base, description: original } });
+  await fireEvent.click(screen.getByRole('button', { name: 'Beschreibung bearbeiten' }));
+  const changed = original + '\n\nWeitere Angaben.\n';
+  await fireEvent.input(screen.getByLabelText('Beschreibung der Karte'), { target: { value: changed } });
+  await fireEvent.click(screen.getByRole('button', { name: 'Speichern' }));
+  expect(onSave).toHaveBeenCalledWith({ description: changed });
+});
+
+it('does not turn a link click into description editing', async () => {
+  setup({ card: { ...base, description: '[Unterkunft](https://example.com)' } });
+  const link = screen.getByRole('link', { name: 'Unterkunft' });
+  expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+  await fireEvent.click(link);
+  expect(screen.queryByLabelText('Beschreibung der Karte')).not.toBeInTheDocument();
 });

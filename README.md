@@ -126,3 +126,12 @@ Server, rot bei Offline- oder API-Verbindungsfehlern, grau während der ersten
 Prüfung. Der Tooltip benennt den Zustand. Alle 15 Sekunden und bei einer
 Wiederverbindung wird der App-Server erneut geprüft (maximal 5 Sekunden Wartezeit).
 Der Punkt bestätigt keine Speicherung einer einzelnen Änderung.
+
+### Kartenbeschreibungen
+
+Beschreibungen werden als Markdown mit Absätzen, Zeilenumbrüchen, Überschriften,
+Listen, Links und Tabellen angezeigt. Zum Bearbeiten die Beschreibung anklicken;
+der Editor behält den Markdown-Quelltext bei. Links öffnen separat.
+Eingebettetes HTML wird als Text angezeigt. Normale Überschriften und Listen
+bleiben Bestandteil der Beschreibung; nur Aufgabenlisten werden als Checklisten
+ausgelesen.

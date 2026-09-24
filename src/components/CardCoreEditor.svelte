@@ -1,5 +1,6 @@
 <script>
   import { parseChecklists, serializeChecklists } from '../lib/checklist.js';
+  import MarkdownDescription from './MarkdownDescription.svelte';
   import CardChecklist from './CardChecklist.svelte';
   import AddChecklistPopover from './AddChecklistPopover.svelte';
   import DatePickerPopover from './DatePickerPopover.svelte';
@@ -76,7 +77,8 @@
 
   async function saveDesc() {
     editingDesc = false;
-    const newFullDescription = serializeChecklists(descDraft, checklists);
+    if (descDraft === descriptionText) return;
+    const newFullDescription = checklists.length ? serializeChecklists(descDraft, checklists) : descDraft;
     if (newFullDescription !== rawDescription) {
       await onSave?.({ description: newFullDescription });
     }
@@ -211,8 +213,8 @@
         <button class="btn help-btn" type="button">Formatierungshilfe</button>
       </div>
     {:else if descriptionText}
-      <div class="desc-box" onclick={startDesc} role="button" tabindex="0" onkeydown={(e) => e.key === 'Enter' && startDesc()}>
-        <p class="desc" data-testid="description">{descriptionText}</p>
+      <div class="desc-box" onclick={(e) => { if (!e.target.closest('a')) startDesc(); }} role="button" tabindex="0" aria-label="Beschreibung bearbeiten" onkeydown={(e) => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); startDesc(); } }}>
+        <MarkdownDescription text={descriptionText} />
       </div>
     {:else}
       <button class="desc-placeholder-btn" type="button" aria-label="Fügen Sie eine detailliertere Beschreibung hinzu" onclick={startDesc}>

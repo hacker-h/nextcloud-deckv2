@@ -81,3 +81,27 @@ describe('checklist markdown parser & serializer', () => {
     expect(summary.done).toBe(2);
   });
 });
+
+it('preserves normal headings and bullets instead of treating them as checklists', () => {
+  const source = '## Rahmen\n\n- Vier Erwachsene\n- Drei Zimmer\n\n### Vergleich\n\n1. Feldberg\n2. Oberstdorf';
+  expect(parseChecklists(source)).toEqual({ descriptionText: source, checklists: [] });
+});
+
+it('preserves ordinary bullets following checklist items', () => {
+  const parsed = parseChecklists('### Aufgaben\n- [ ] Buchen\n\n- Unterkunft vergleichen\n- Preise prüfen');
+  expect(parsed.checklists[0].items).toHaveLength(1);
+  expect(parsed.descriptionText).toBe('- Unterkunft vergleichen\n- Preise prüfen');
+});
+
+it('leaves headings and task-like lines inside fenced code untouched', () => {
+  const source = '```markdown\n## Beispiel\n- [ ] Kein echtes To-do\n```';
+  expect(parseChecklists(source)).toEqual({ descriptionText: source, checklists: [] });
+});
+
+it('round-trips an explicitly created empty checklist', () => {
+  const source = serializeChecklists('Beschreibung', [{ title: 'Packliste', items: [] }]);
+  const parsed = parseChecklists(source);
+  expect(parsed.descriptionText).toBe('Beschreibung');
+  expect(parsed.checklists).toHaveLength(1);
+  expect(parsed.checklists[0]).toMatchObject({ title: 'Packliste', items: [] });
+});

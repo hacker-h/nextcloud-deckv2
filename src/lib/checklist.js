@@ -10,13 +10,31 @@ export function parseChecklists(description = '') {
   const textLines = [];
   const checklists = [];
   let currentChecklist = null;
+  let fence = null;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
 
+    const fenceMatch = line.match(/^ {0,3}(`{3,}|~{3,})/);
+    if (fence) {
+      textLines.push(line);
+      if (fenceMatch && fenceMatch[1][0] === fence[0] && fenceMatch[1].length >= fence.length) fence = null;
+      continue;
+    }
+    if (fenceMatch) {
+      fence = fenceMatch[1];
+      currentChecklist = null;
+      textLines.push(line);
+      continue;
+    }
+    if (line.trim() === '<!-- deckv2:checklist -->' && currentChecklist) continue;
+
     // Check for checklist header: e.g., "### Checkliste1" or "## Checkliste"
     const headerMatch = line.match(/^#{2,4}\s+(.+)$/);
-    if (headerMatch && !line.match(/^#{2,4}\s+\[/)) {
+    const nextContent = headerMatch ? lines.slice(i + 1).find((next) => next.trim()) : null;
+    const hasChecklist = nextContent && (/^\s*[-*]\s+\[([ xX])\]\s+/.test(nextContent)
+      || nextContent.trim() === '<!-- deckv2:checklist -->');
+    if (headerMatch && hasChecklist && !line.match(/^#{2,4}\s+\[/)) {
       currentChecklist = {
         id: stableId('cl', checklists.length, headerMatch[1].trim()),
         title: headerMatch[1].trim(),
@@ -84,18 +102,13 @@ export function parseChecklists(description = '') {
       continue;
     }
 
-    // If we reach a non-checklist, non-header line, reset currentChecklist context
-    if (line.trim() !== '' && !line.startsWith('-') && !line.startsWith('*')) {
-      currentChecklist = null;
-    }
-
-    if (!currentChecklist) {
-      textLines.push(line);
-    }
+    // Ordinary Markdown (including bullets) must never be swallowed.
+    if (line.trim() !== '') currentChecklist = null;
+    textLines.push(line);
   }
 
   // Clean trailing empty lines from description text
-  const descriptionText = textLines.join('\n').trim();
+  const descriptionText = checklists.length ? textLines.join('\n').trim() : description;
 
   return { descriptionText, checklists };
 }
@@ -112,6 +125,7 @@ export function serializeChecklists(descriptionText = '', checklists = []) {
 
     if (parts.length > 0) parts.push('');
     parts.push(`### ${cl.title || 'Checkliste'}`);
+    if (!cl.items.length) parts.push('<!-- deckv2:checklist -->');
 
     for (const item of cl.items) {
       const mark = item.done ? 'x' : ' ';
