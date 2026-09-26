@@ -99,7 +99,7 @@
   }
 </script>
 
-<aside aria-label="Planungskalender">
+<aside data-planning-panel aria-label="Planungskalender">
   <header><h2>Einplanen</h2><button onclick={onClose} title="Planung schließen" aria-label="Planung schließen">✕</button></header>
   <p class="hint">Karten auf einen Tag, eine Woche oder den Monat ziehen. Fälligkeit bleibt unabhängig.</p>
   <nav><button onclick={() => navigate(-1)} aria-label="Vorheriger Monat">‹</button><strong>{label}</strong><button onclick={() => navigate(1)} aria-label="Nächster Monat">›</button></nav>

@@ -66,3 +66,10 @@ audit/bundle gates before release; CI image and deployed production smoke afterw
 - Real integration verification used a newly created disposable card on the
   designated test board (116), verified completion/undo and planning HTTP
   readback against live Nextcloud authorization, and deleted the QA card.
+
+## Calendar boundary regression (v0.12.1)
+
+Drops onto sidebar chrome are cancelled instead of reaching the geometric
+fallback for offscreen board columns. Board auto-scrolling stops while the
+pointer is over the planning sidebar. Browser regressions exercise both cases
+in Chromium, Firefox and WebKit.

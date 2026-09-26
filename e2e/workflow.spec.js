@@ -139,3 +139,25 @@ test('failed saves stay visible and a week drag highlights the full target range
   await expect(page.locator('.grid .highlight')).toHaveCount(7);
   await page.mouse.up();
 });
+
+test('dropping on calendar chrome never moves a card into a hidden board column', async ({ page, backend }) => {
+  await ready(page);
+  await page.getByRole('button', { name: 'Kalender', exact: true }).click();
+  await dragTo(page, page.locator('[data-card-id="1001"]'), page.getByRole('heading', { name: 'Einplanen', exact: true }));
+  await expect(page.locator('[data-stack-id="301"] [data-card-id="1001"]')).toBeVisible();
+  expect(backend.find('/cards/1001', 'PUT')).toHaveLength(0);
+});
+
+test('hovering a calendar drop target does not keep scrolling the board', async ({ page, backend }) => {
+  await ready(page);
+  await page.getByRole('button', { name: 'Kalender', exact: true }).click();
+  const a = await page.locator('[data-card-id="1001"]').boundingBox();
+  const b = await page.locator('[data-plan-kind="week"]').nth(2).boundingBox();
+  await page.mouse.move(a.x + 30, a.y + 15); await page.mouse.down();
+  await page.mouse.move(b.x + 10, b.y + 10, { steps: 12 });
+  await expect(page.locator('.grid .highlight')).toHaveCount(7);
+  const before = await page.locator('.board').evaluate((el) => el.scrollLeft);
+  await page.waitForTimeout(250);
+  expect(await page.locator('.board').evaluate((el) => el.scrollLeft)).toBe(before);
+  await page.mouse.up();
+});

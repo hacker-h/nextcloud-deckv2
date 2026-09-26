@@ -12,6 +12,7 @@ const THRESHOLD = 5; // px before a click becomes a drag
 export const drag = $state({
   active: false,
   planTarget: null,
+  overPlanning: false,
   cardIds: [],        // cards being dragged (multi-select ready)
   card: null,         // primary card, for the preview
   count: 1,
@@ -100,6 +101,7 @@ if (typeof window !== 'undefined') {
 export function resetDrag() {
   drag.active = false;
   drag.planTarget = null;
+  drag.overPlanning = false;
   drag.cardIds = [];
   drag.card = null;
   drag.heights = [];
@@ -184,7 +186,7 @@ function scrollTick() {
   if (!drag.active) { raf = 0; return; }
 
   const board = document.querySelector('[data-board]');
-  if (board) {
+  if (board && !drag.overPlanning) {
     const r = board.getBoundingClientRect();
     const vx = edgeVelocity(drag.x, r.left, r.right);
     if (vx) board.scrollLeft += vx;
@@ -282,9 +284,13 @@ function onMove(e) {
 
   // Hit-test stacks. elementsFromPoint sees through the preview because the
   // preview is pointer-events:none.
-  const plan = document.elementsFromPoint(e.clientX, e.clientY).find((el) => el.dataset?.planStart);
+  const surfaces = document.elementsFromPoint(e.clientX, e.clientY);
+  drag.overPlanning = surfaces.some((el) => el.hasAttribute?.('data-planning-panel'));
+  const plan = surfaces.find((el) => el.dataset?.planStart);
   drag.planTarget = plan ? { start: plan.dataset.planStart, granularity: plan.dataset.planKind } : null;
-  const stackEl = plan ? null : stackFromPoint(e.clientX, e.clientY);
+  // Sidebar chrome is not a drop target. Do not fall through to offscreen
+  // column rectangles behind the panel, or pan the board while planning.
+  const stackEl = drag.overPlanning ? null : stackFromPoint(e.clientX, e.clientY);
 
   if (stackEl) {
     const stackId = Number(stackEl.dataset.stackId);
