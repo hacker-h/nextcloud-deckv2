@@ -345,6 +345,9 @@ export function draggable(node, opts) {
     // Left button only, and never start a second gesture.
     if (e.button !== 0 || e.isPrimary === false || g) return;
 
+    // Own the pointer gesture: WebKit otherwise starts native selection
+    // auto-scroll when the source anchor disappears during our drag.
+    e.preventDefault();
     const r = node.getBoundingClientRect();
     const o = opts();
     g = {
