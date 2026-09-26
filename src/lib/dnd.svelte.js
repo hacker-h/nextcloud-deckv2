@@ -345,9 +345,10 @@ export function draggable(node, opts) {
     // Left button only, and never start a second gesture.
     if (e.button !== 0 || e.isPrimary === false || g) return;
 
-    // Own the pointer gesture: WebKit otherwise starts native selection
-    // auto-scroll when the source anchor disappears during our drag.
+    // Own selection/scrolling, but retain the anchor as the dialog opener
+    // so closing details restores keyboard focus to this card.
     e.preventDefault();
+    node.focus({ preventScroll: true });
     const r = node.getBoundingClientRect();
     const o = opts();
     g = {

@@ -34,6 +34,7 @@ test('browser Back closes the card and Forward reopens it', async ({ page, backe
   await page.goBack();
   await expect(dialog(page)).toHaveCount(0);
   await expect(page).toHaveURL(/#\/boards\/100$/);
+  await expect(card(page)).toBeFocused();
   await page.goForward();
   await expect(dialog(page)).toHaveAttribute('aria-label', 'Pizza Margherita');
   await expect(page).toHaveURL(/#\/boards\/100\/cards\/1001$/);
