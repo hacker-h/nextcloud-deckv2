@@ -112,10 +112,13 @@ test.describe('external drag onto board cards', () => {
     browserName,
   }) => {
     const { page, backend } = board;
+    await page.clock.install();
     const target = page.locator('.card').first();
     const point = await centre(target);
 
     await dragAcross(page, browserName, [point], { url: LINK, drop: true });
+    // Keep the three-second success toast alive during pixel capture on slower engines.
+    await page.clock.pauseAt(new Date(Date.now() + 500));
 
     // The old test asserted only that *a* toast appeared. A drop that shows a
     // toast and then silently does nothing is exactly the reported bug, so the
@@ -130,7 +133,9 @@ test.describe('external drag onto board cards', () => {
     await expectBottomLeftToast(page, toast);
     await expect(toast).toContainText('Erfolgreich');
     await expect(toast).toHaveCSS('background-color', NEUTRAL_TOAST);
-    await expect(page).toHaveScreenshot('tile-link-success-toast.png');
+    // Position and dock overlap are asserted above. The pixel baseline covers
+    // the toast itself, independent of unrelated live toolbar statuses.
+    await expect(toast).toHaveScreenshot('tile-link-success-toast.png');
   });
 
   test('dropping a file fires the upload request', async ({ board, browserName }) => {

@@ -5,9 +5,10 @@
 // never a spinner on the board. Measured server cost is ~1.2-1.5s per move, so
 // anything that waits for the response feels broken.
 
+import { createMoveHistory } from './move-history.svelte.js';
 import { ORDER_STEP, planOrders } from '../../shared/ordering.js';
 
-export function createBoardStore(client) {
+export function createBoardStore(client, { autoCompleteDone = () => true } = {}) {
   const cache = new Map();
   const inflight = new Map();
   const mutationEpochs = new Map();
@@ -19,6 +20,12 @@ export function createBoardStore(client) {
     error: null,
     toast: null,
     pending: 0,
+  });
+
+  const history = createMoveHistory(client, (boardId, stacks) => {
+    mutationEpochs.set(boardId, epochFor(boardId) + 1);
+    cacheStacks(boardId, stacks);
+    if (s.boardId === boardId) s.stacks = stacks;
   });
 
   function findCard(id) {
@@ -175,6 +182,10 @@ export function createBoardStore(client) {
   // Move one or more cards into toStackId at index, preserving their relative
   // order (PLAN.md section 6).
   async function moveCards({ cardIds, toStackId, index, boardId }) {
+    if (s.pending || history.state.busy) {
+      s.toast = { text: 'Die vorherige Verschiebung wird noch gespeichert. Bitte kurz warten.' };
+      return;
+    }
     const dest = s.stacks.find((x) => x.id === toStackId);
     if (!dest) return;
 
@@ -199,19 +210,25 @@ export function createBoardStore(client) {
     // right slot with the wrong order.
     const snapshot = {
       stacks: s.stacks.map((st) => ({ ...st, cards: [...st.cards] })),
-      fields: new Map(s.stacks.flatMap((st) => st.cards.map((c) => [c, { order: c.order, stackId: c.stackId }]))),
+      fields: new Map(s.stacks.flatMap((st) => st.cards.map((c) => [c, { order: c.order, stackId: c.stackId, done: c.done }]))),
     };
     const rollback = () => {
       for (const [card, f] of snapshot.fields) Object.assign(card, f);
-      s.stacks = snapshot.stacks;
-      commitLocal(boardId);
+      cacheStacks(boardId, snapshot.stacks);
+      mutationEpochs.set(boardId, epochFor(boardId) + 1);
+      if (s.boardId === boardId || s.boardId == null) s.stacks = snapshot.stacks;
     };
 
     // --- optimistic local update ---
     for (const st of s.stacks) st.cards = st.cards.filter((c) => !cardIds.includes(c.id));
     const at = Math.min(index ?? dest.cards.length, dest.cards.length);
     dest.cards.splice(at, 0, ...moving);
-    moving.forEach((c) => (c.stackId = toStackId));
+    moving.forEach((c) => {
+      if (c.stackId !== toStackId && autoCompleteDone() && dest.title?.trim().toLowerCase() === 'done' && !c.done) {
+        c.done = new Date().toISOString();
+      }
+      c.stackId = toStackId;
+    });
 
     // --- assign orders (M0.4, see ordering.js) ---
     const dirty = planOrders({ cards: dest.cards, at, movingCount: moving.length }).map(({ card, order }) => {
@@ -227,7 +244,8 @@ export function createBoardStore(client) {
     const worker = async () => {
       for (let card = queue.shift(); card; card = queue.shift()) {
         try {
-          await client.moveCard({ card, toBoardId: boardId, toStackId, order: card.order });
+          const saved = await client.moveCard({ card, toBoardId: boardId, toStackId, order: card.order });
+          if (saved && Object.hasOwn(saved, 'done')) card.done = saved.done;
         } catch (e) {
           failed.push({ card, error: e.message });
         } finally {
@@ -239,7 +257,20 @@ export function createBoardStore(client) {
 
     if (failed.length) {
       rollback();
+      if (failed.length < dirty.length) {
+        // A multi-card move is not a server transaction: reconcile successful
+        // writes rather than claiming the entire batch was rolled back.
+        try {
+          const { data } = await client.getStacks(boardId);
+          cacheStacks(boardId, data);
+          if (s.boardId === boardId) s.stacks = data;
+        } catch { /* Failure remains visible; the next board load reconciles. */ }
+      }
       failToast(failed);
+    } else {
+      const before = new Map([...snapshot.fields].map(([card, fields]) => [card.id, fields]));
+      commitLocal(boardId);
+      history.record(boardId, before, dirty);
     }
   }
 
@@ -292,8 +323,10 @@ export function createBoardStore(client) {
 
   return {
     state: s,
+    history,
     load,
     preload,
+    isCached: (boardId) => cache.has(boardId),
     refresh,
     moveCards,
     replaceCard,

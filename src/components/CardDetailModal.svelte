@@ -4,6 +4,7 @@
 
   let {
     card = null,
+    readOnly = false,
     loading = false,
     error = null,
     dirty = false,
@@ -36,7 +37,7 @@
   let dragDepth = 0;
 
   function startTitleEdit() {
-    if (titleSave) return;
+    if (titleSave || readOnly) return;
     titleDraft = card?.title ?? '';
     editingTitle = true;
   }
@@ -209,6 +210,7 @@
   }
 
   function onModalDragOver(e) {
+    if (readOnly) return;
     e.preventDefault();
     e.stopPropagation();
     // The board's cards claim ownership of the external-drop overlay on their
@@ -221,6 +223,7 @@
   }
 
   function onModalDragEnter(e) {
+    if (readOnly) return;
     e.preventDefault();
     e.stopPropagation();
     const dt = e.dataTransfer;
@@ -242,6 +245,7 @@
   }
 
   async function onModalDrop(e) {
+    if (readOnly) return;
     e.preventDefault();
     e.stopPropagation();
     dragDepth = 0;
@@ -335,7 +339,7 @@
             autofocus
           />
         {:else}
-          <button class="title-button" type="button" disabled={Boolean(titleSave)} onclick={startTitleEdit} title="Titel bearbeiten">
+          <button class="title-button" type="button" disabled={Boolean(titleSave) || readOnly} onclick={startTitleEdit} title={readOnly ? 'Schreibgeschützt' : 'Titel bearbeiten'}>
             {card?.title ?? 'Karte'}
             <svg class="edit-icon" viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" aria-hidden="true">
               <path d="m3 11-.5 2.5L5 13l7.2-7.2-2-2L3 11Z" />

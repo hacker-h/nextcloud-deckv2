@@ -1,4 +1,12 @@
 <script>
+  import PlanningSidebar from './PlanningSidebar.svelte';
+  import { updateCard } from '../lib/cards.js';
+  import ReadOnlyCard from './ReadOnlyCard.svelte';
+  import SaveStatus from './SaveStatus.svelte';
+  import CardSearch from './CardSearch.svelte';
+  import { shortcut, isEditing } from '../lib/shortcuts.js';
+  import WorkflowOptions from './WorkflowOptions.svelte';
+  import { createPreferences } from '../lib/preferences.svelte.js';
   import { onDestroy } from 'svelte';
   import { ORDER_STEP } from '../../shared/ordering.js';
   import { createCardNavigation } from '../lib/card-navigation.js';
@@ -8,13 +16,13 @@
   import { boardAssignmentOptions } from '../lib/assignments.js';
   import { downloadAttachment, uploadAttachment, addLinkAttachment } from '../lib/attachments.js';
   import { touch, sortByMru, readMru } from '../lib/mru.js';
-  import { accessLevel } from '../lib/permissions.js';
+  import { accessLevel, canEditBoard } from '../lib/permissions.js';
   import { applyCardClick, applyShiftClick, emptySelection, orderedSelection } from '../lib/selection.js';
   import { createInboxStore } from '../lib/inbox.svelte.js';
   import { withoutInbox, readCollapsed, writeCollapsed } from '../lib/inbox.js';
   import { CalendarClient, applyCalendarPulls, calendarEntries } from '../lib/calendar.js';
   import { createCard } from '../lib/cards.js';
-  import { preloadBoards, PRELOAD_LIMIT } from '../lib/board-preload.js';
+  import { preloadBoards } from '../lib/board-preload.js';
   import Board from './Board.svelte';
   import InboxPanel from './InboxPanel.svelte';
   import BoardSwitcher from './BoardSwitcher.svelte';
@@ -32,10 +40,44 @@
 
   let { currentUser, onSignOut = () => {}, onUnauthorized = () => {} } = $props();
 
-  const client = new DeckClient({ onUnauthorized: () => onUnauthorized() });
+  let writeStatus = $state({ pending: 0, failed: 0, saved: false });
+  const userLabel = $derived(currentUser?.displayName ?? currentUser?.uid ?? currentUser?.id ?? currentUser);
+  const client = new DeckClient({ onUnauthorized: () => onUnauthorized(), onWrite: (state) => writeStatus = state });
   const calendar = new CalendarClient();
 
-  const board = createBoardStore(client);
+  // svelte-ignore state_referenced_locally -- settings belong to the signed-in session.
+  const preferences = createPreferences(currentUser);
+  let planningOpen = $state(false);
+  let optionsOpen = $state(false);
+  async function planningDeadline(cardId, day) {
+    const stack = stacks.find((s) => s.cards.some((c) => c.id === cardId));
+    if (!stack || readOnly) return;
+    const { data } = await updateCard(client, { boardId: current.id, stackId: stack.id, cardId,
+      changes: { duedate: new Date(`${day}T23:59:00`).toISOString() } });
+    board.replaceCard(data);
+  }
+  let searchOpen = $state(false);
+  let searchMine = $state(false);
+  function showSearch(mine = false) { searchMine = mine; searchOpen = true; }
+  function workflowKeydown(event) {
+    if (event.defaultPrevented || document.querySelector('dialog[open]')) return;
+    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && !event.altKey && event.key.toLowerCase() === 'z'
+      && !isEditing(event.target) && !searchOpen && !optionsOpen && detail.state.cardId == null
+      && board.history.state.entries.length && !board.state.pending) {
+      event.preventDefault(); void board.history.undo();
+    }
+    if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+      if (detail.state.cardId != null || optionsOpen) return;
+      event.preventDefault(); showSearch();
+    }
+  }
+  async function pickSearch({ card, board: target }) {
+    routes.write(target.id, card.id);
+    await routes.restore();
+  }
+  const board = createBoardStore(client, { autoCompleteDone: () => preferences.state.autoCompleteDone });
+  const sortedBoards = $derived(preferences.state.boardSort === 'alphabetical'
+    ? [...boards].sort((a, b) => a.title.localeCompare(b.title, 'de')) : boards);
 
   let tileToast = $state(null);
   let activeView = $state('board');
@@ -82,12 +124,14 @@
     onClose: () => routes.write(current?.id ?? inbox.state.board?.id, null, { replace: true }),
   });
 
-  let allBoards = [];
+  let allBoards = $state([]);
   let detailModal = $state(null);
   let boards = $state([]);
   let current = $state(null);
   let assignmentOptions = $state({ labels: [], participants: [] });
 
+  const readOnly = $derived(!canEditBoard(current));
+  const detailReadOnly = $derived(!canEditBoard(allBoards.find((b) => b.id === detail.state.boardId)));
   const stacks = $derived(board.state.stacks);
   const loading = $derived(board.state.loading);
   const error = $derived(board.state.error);
@@ -174,7 +218,7 @@
   const preloaded = $derived(preloadProgress ?? { done: 0, total: 0, cards: 0, stacks: 0, loading: [] });
   // The active board plus the preload queue. Capped the same way the scheduler
   // caps itself, so the denominator matches the work that will really happen.
-  const boardsTotal = $derived(Math.min(boards.length, PRELOAD_LIMIT + 1));
+  const boardsTotal = $derived(preloadProgress ? preloaded.total + 1 : (loadPhase === 'boards' ? boards.length : 1));
   const boardsDone = $derived(preloaded.done + (loadPhase ? 0 : 1));
   const totalCards = $derived(preloaded.cards + cardCount);
   const totalStacks = $derived(preloaded.stacks + stacks.length);
@@ -220,6 +264,7 @@
         navigator.connection?.saveData
       ),
       preload: board.preload,
+      isCached: board.isCached,
       onProgress: (event) => {
         // A stale run must not repaint the bar for the board we just left.
         if (token !== preloadToken) return;
@@ -235,9 +280,12 @@
     const token = ++preloadToken;
     preloadProgress = null;
     current = b;
+    clearSelection();
+    if (!canEditBoard(b)) activeView = 'board';
     touch(b.id);
+    boards = sortByMru(boards);
     loadAssignmentOptions(b);
-    beginPhase('board');
+    beginPhase(board.isCached(b.id) ? null : 'board');
     // The background pool is started only after the active board resolves. Six
     // workers racing it for connections is exactly what made the board the user
     // is looking at finish last; the user asked for the opposite.
@@ -262,6 +310,7 @@
   );
 
   function handleSelect({ card }) {
+    if (readOnly) return;
     const stack = allStacks.find((s) => s.id === card.stackId);
     selection = applyShiftClick(selection, {
       cardId: card.id,
@@ -282,6 +331,7 @@
   // A drop is routed by which side owns the source and target stacks, so the
   // four board/inbox combinations stay explicit rather than implied.
   function handleDrop({ cardIds, toStackId, index }) {
+    if (readOnly) return;
     const intoInbox = toStackId === inbox.state.stack?.id;
     const fromInbox = inbox.cardsByIds(cardIds);
 
@@ -309,6 +359,10 @@
   }
 
   async function moveFromInbox({ cards, toStackId, index }) {
+    const original = new Map(cards.map((card) => [card.id, { stackId: card.stackId, order: card.order, done: card.done }]));
+    if (preferences.state.autoCompleteDone && stacks.find((s) => s.id === toStackId)?.title?.trim().toLowerCase() === 'done') {
+      for (const card of cards) card.done ||= new Date().toISOString();
+    }
     const placed = board.insertCards({ cards, toStackId, index });
     const failed = await inbox.release({
       cards,
@@ -316,10 +370,15 @@
       toStackId,
       order: placed.order,
     });
-    if (failed.length) board.removeCards(failed.map((c) => c.id));
+    if (failed.length) {
+      board.removeCards(failed.map((c) => c.id));
+      for (const card of failed) Object.assign(card, original.get(card.id));
+      tileToast = { status: 'error', message: 'Verschieben aus dem Eingang fehlgeschlagen.' };
+    }
   }
 
   function moveSelectionTo(toStackId) {
+    if (readOnly) return;
     const cardIds = orderedSelection(selection, stacks);
     if (!cardIds.length) return;
     board.moveCards({ cardIds, toStackId, index: null, boardId: current.id });
@@ -359,7 +418,7 @@
   }
 
   async function syncBoardDates() {
-    if (!calendarReady || !current) return null;
+    if (!calendarReady || !current || readOnly) return null;
     const result = await calendar.sync(calendarEntries(stacks, current.id), {
       autoCreate: true,
       scopeBoardIds: [String(current.id)],
@@ -507,6 +566,10 @@
   init();
 </script>
 
+<svelte:window onkeydown={workflowKeydown} />
+{#if searchOpen}<CardSearch boards={allBoards} {current} {stacks} user={currentUser} loadStacks={board.preload} initialMine={searchMine} onPick={pickSearch} onClose={() => searchOpen = false} />{/if}
+{#if optionsOpen}<WorkflowOptions {preferences} onClose={() => optionsOpen = false} />{/if}
+
 <div class="app">
   <InboxPanel
     state={inbox.state}
@@ -521,17 +584,22 @@
 
   <div class="main">
     <header class="topbar">
-      <BoardSwitcher {boards} {current} onselect={openBoard} onpreload={(candidate) => board.preload(candidate.id)} bind:open={switcherOpen} />
+      <BoardSwitcher boards={sortedBoards} {current} onselect={openBoard} onpreload={(candidate) => board.preload(candidate.id)} bind:open={switcherOpen} />
+      <div class="workflow-actions">
+      <button class="signout" onclick={() => showSearch()} title={`Karten suchen (${shortcut('K')})`}>Suche</button>
+      <button class="signout" onclick={() => showSearch(true)} title="Mir zugewiesene unerledigte Karten auf allen Boards">Meine Aufgaben</button>
+      <button class="signout" onclick={() => planningOpen = !planningOpen} aria-pressed={planningOpen} title="Planungskalender ein-/ausklappen">Kalender</button>
+      <button class="signout" onclick={() => optionsOpen = true} title="Optionen">⚙ Optionen</button>
+      </div>
       {#if current}
         <span class="current-access"><AccessBadge level={accessLevel(current)} /></span>
       {/if}
       {#if !loading && !error}
         <span class="stat">{stacks.length} Listen · {cardCount} Karten</span>
       {/if}
-      {#if board.state.pending > 0}
-        <span class="pending" title="Wird in Deck gespeichert">
-          {board.state.pending} wird gespeichert…
-        </span>
+      <SaveStatus state={writeStatus} />
+      {#if board.history.state.entries.length}
+        <button class="signout" disabled={board.history.state.busy || board.state.pending > 0} onclick={() => board.history.undo()} title={`Verschieben rückgängig (${shortcut('Z')})`}>↶ Rückgängig</button>
       {/if}
       {#if showAggregate}
         <LoadProgress
@@ -554,8 +622,8 @@
       <span class="build" title={`Erstellt am ${__BUILD_TIME__}`}>v{__APP_VERSION__} ({__BUILD_SHA__})</span>
       <!-- Plain text beats an avatar menu here: the topbar is dense, and one action
         does not justify hiding the signed-in username behind another interaction. -->
-      <div class="account" title={`Angemeldet als ${currentUser}`} aria-label={`Angemeldet als ${currentUser}`}>
-        <span class="account-user">{currentUser}</span>
+      <div class="account" title={`Angemeldet als ${userLabel}`} aria-label={`Angemeldet als ${userLabel}`}>
+        <span class="account-user">{userLabel}</span>
         <span class="account-sep" aria-hidden="true">•</span>
         <button class="signout" type="button" onclick={() => onSignOut()}>Abmelden</button>
       </div>
@@ -601,7 +669,7 @@
           </div>
         {/each}
       </div>
-    {:else if activeView === 'planner'}
+    {:else if activeView === 'planner' && !readOnly}
       <Planner
         {calendar}
         deckClient={client}
@@ -611,7 +679,9 @@
         onOpenCard={handlePlannerOpen}
       />
     {:else}
+      <div class="board-and-planning">
       <Board
+        {readOnly}
         {stacks}
         boardId={current?.id}
         {client}
@@ -625,8 +695,13 @@
         onAttachLink={handleTileAttachLink}
         onAddCard={handleAddCard}
       />
+      {#if planningOpen && current}<PlanningSidebar board={current} {stacks} {preferences} {calendar} {readOnly} onClose={() => planningOpen = false} onOpenCard={handleOpenCard} onDeadline={planningDeadline} />{/if}
+      </div>
     {/if}
 
+    {#if board.history.state.error && !tileToast}
+      <Toast status="error" message={board.history.state.error} onClose={() => board.history.state.error = null} />
+    {/if}
     {#if tileToast}
       <Toast
         status={tileToast.status}
@@ -657,6 +732,7 @@
 
     <BottomNav
       {activeView}
+      plannerDisabled={readOnly}
       inboxOpen={!inboxCollapsed}
       {switcherOpen}
       onInbox={toggleInbox}
@@ -670,6 +746,7 @@
     <CardDetailModal
       bind:this={detailModal}
       card={detail.state.card}
+      readOnly={detailReadOnly}
       loading={detail.state.loading}
       error={detail.state.error}
       dirty={detail.state.dirty || detail.state.draftPending}
@@ -682,6 +759,9 @@
       onAttachLink={detail.addLink}
     >
       {#snippet main()}
+        {#if detailReadOnly}
+          <ReadOnlyCard card={detail.state.card} comments={detail.state.comments} attachments={detail.state.attachments} onDownload={handleDownload} />
+        {:else}
         <CardCoreEditor
           card={detail.state.card}
           error={detail.state.actionScope === 'core' ? detail.state.actionError : null}
@@ -694,9 +774,11 @@
           onEdit={detail.editComment}
           onDelete={detail.removeComment}
         />
+        {/if}
       {/snippet}
 
       {#snippet sidebar()}
+        {#if !detailReadOnly}
         <CardMetadataEditor
           card={detail.state.card}
           error={detail.state.actionScope === 'metadata' ? detail.state.actionError : null}
@@ -722,6 +804,7 @@
           onUnarchive={detail.unarchive}
           onDelete={detail.softDelete}
         />
+        {/if}
       {/snippet}
     </CardDetailModal>
   {/if}
@@ -736,6 +819,10 @@
 </div>
 
 <style>
+  @media (max-width: 1500px) { .topbar .stat, .topbar .build { display: none; } }
+  @media (max-width: 1000px) { .app .topbar { flex-wrap: wrap; height: auto; flex-basis: auto; min-height: var(--topbar-h); padding-block: 8px; } }
+  .board-and-planning { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+  .board-and-planning :global(.board) { flex: 1; min-width: 0; }
   .app { display: flex; height: 100%; }
 
   .main { display: flex; flex-direction: column; flex: 1; min-width: 0; position: relative; }
@@ -776,6 +863,8 @@
   }
   .selclear:hover { background: var(--card-bg-hover); color: var(--text); }
 
+  .workflow-actions { display: flex; gap: 8px; flex: 0 0 auto; }
+  .topbar > :global(.switcher) { flex: 0 0 auto; }
   .topbar {
     display: flex;
     align-items: center;
@@ -796,7 +885,6 @@
   .stat { font-size: 12px; color: var(--text-dim); }
   .build { font-size: 12px; color: var(--text-dim); font-variant-numeric: tabular-nums; }
   .current-access { flex: 0 0 auto; }
-  .pending { font-size: 12px; color: var(--accent); }
 
   /* Full-width strip directly beneath the topbar. It replaces nothing - the
      skeletons still render below it - so the board never looks blocked while

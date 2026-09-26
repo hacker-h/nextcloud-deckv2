@@ -65,6 +65,7 @@
               onfocus={() => onpreload?.(board)}
             >
               <span class="swatch" style="background:#{board.color}"></span>
+              {#if accessLevel(board) === 'view'}<span title="Schreibgeschützt" aria-label="Schreibgeschützt">🔒</span>{/if}
               <span class="label">{board.title}</span>
               <span class="access"><AccessBadge level={accessLevel(board)} /></span>
             </button>

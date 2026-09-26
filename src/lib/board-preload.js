@@ -41,8 +41,9 @@ export async function preloadBoards({
   limit = PRELOAD_LIMIT,
   concurrency = 6,
   onProgress,
+  isCached = () => false,
 }) {
-  const queue = boardPreloadOrder(boards, activeId, mru).slice(0, limit);
+  const queue = boardPreloadOrder(boards, activeId, mru).slice(0, limit).filter((board) => !isCached(board.id));
   const total = queue.length;
   if (!total) return;
 

@@ -147,3 +147,20 @@ die Detailansicht. Ungespeicherte Änderungen werden dabei geschützt.
 Die Spalte wird beim Aufrufen ermittelt, deshalb bleiben Links nach einem
 Spaltenwechsel innerhalb desselben Boards gültig. Gelöschte, nicht freigegebene
 oder in ein anderes Board verschobene Karten zeigen eine verständliche Meldung.
+
+## Workflow controls
+
+- **Search** (`Cmd/Ctrl+K`): switch between the current board and all boards; filter
+  assigned or unfinished cards. **My Tasks** opens that filtered view directly.
+- **Undo** (`Cmd/Ctrl+Z` outside editors): undo recent successful moves within a
+  board. A fresh server check protects newer moves and preserves content edits.
+- **Options**: auto-complete on entry into a `Done` column (on by default), board
+  sorting, optional time suggestions and optional deadline prompts (both off).
+- **Calendar sidebar**: drop a card on a day, week number or month; the highlighted
+  range previews the plan. Date-only plans are independent of Deck deadlines.
+  These personal records persist server-side next to the configured session file.
+  The existing Proton Planner remains the explicit event scheduling surface.
+- Shared read-only boards are visible with a lock and support inspection/search.
+  Save status reports Deck writes separately from the connection indicator.
+
+See [workflow plan and verification](docs/workflow-plan.md) and [roadmap](ROADMAP.md).

@@ -42,17 +42,17 @@ function parseErrorBody(body, contentType) {
 }
 
 const isLive = (x) => !x.archived && Number(x.deletedAt ?? 0) === 0;
-// Boards shared with us read-only. Every mutation against them returns 403, so
-// offering them as a drag target or in the switcher only produces errors
-// (verified: board 109 "Antonia Aufgaben", owned by another user).
-const canEdit = (b) => Boolean((b.permissions ?? {}).PERMISSION_EDIT);
 const byOrder = (a, b) => Number(a.order ?? 0) - Number(b.order ?? 0);
 
 export class DeckClient {
   #onUnauthorized;
+  #onWrite;
+  #pending = 0;
+  #failures = new Set();
 
-  constructor({ onUnauthorized = () => {} } = {}) {
+  constructor({ onUnauthorized = () => {}, onWrite = () => {} } = {}) {
     this.#onUnauthorized = onUnauthorized;
+    this.#onWrite = onWrite;
   }
 
   deck(path, options = {}) {
@@ -64,6 +64,25 @@ export class DeckClient {
   }
 
   async #request(prefix, path, options) {
+    const method = options.method ?? 'GET';
+    if (method === 'GET' || method === 'HEAD') return this.#performRequest(prefix, path, options);
+    const key = `${method}:${prefix}${path}`;
+    this.#pending += 1;
+    this.#onWrite({ pending: this.#pending, failed: this.#failures.size, saved: false });
+    try {
+      const result = await this.#performRequest(prefix, path, options);
+      this.#failures.delete(key);
+      return result;
+    } catch (error) {
+      this.#failures.add(key);
+      throw error;
+    } finally {
+      this.#pending -= 1;
+      this.#onWrite({ pending: this.#pending, failed: this.#failures.size, saved: true });
+    }
+  }
+
+  async #performRequest(prefix, path, options) {
     const {
       method = 'GET',
       body,
@@ -130,7 +149,7 @@ export class DeckClient {
   async getBoards(etag) {
     const r = await this.deck('/boards?details=1', { etag });
     if (r.notModified) return r;
-    return { ...r, data: r.data.filter((b) => isLive(b) && canEdit(b)) };
+    return { ...r, data: r.data.filter(isLive) };
   }
 
   // Returns stacks sorted by `order`, each with its cards sorted by `order`.
@@ -182,7 +201,10 @@ export class DeckClient {
       description: card.description ?? '',
       order,
     };
-    if (card.duedate) body.duedate = card.duedate;
+    body.duedate = card.duedate ?? null;
+    body.done = card.done || null;
+    if (card.startdate !== undefined) body.startdate = card.startdate;
+    if (card.color !== undefined) body.color = card.color;
 
     const r = await this.deck(`/boards/${toBoardId}/stacks/${toStackId}/cards/${card.id}`, {
       method: 'PUT',

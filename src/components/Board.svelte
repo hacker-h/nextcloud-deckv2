@@ -4,7 +4,7 @@
   import { drag } from '../lib/dnd.svelte.js';
   import { boardPan } from '../lib/board-pan.js';
 
-  let { stacks, boardId, client, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onClearSelection, onUploadAttachment, onAttachLink, onAddCard } = $props();
+  let { readOnly = false, stacks, boardId, client, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onClearSelection, onUploadAttachment, onAttachLink, onAddCard } = $props();
 </script>
 
 <!-- Clicking empty board space clears the selection (PLAN.md §6). The handler
@@ -20,7 +20,7 @@
   use:boardPan={{ onBackgroundClick: onClearSelection, isBlocked: () => drag.active }}
 >
   {#each stacks as stack (stack.id)}
-    <Stack {stack} {boardId} {onDrop} {onOpenCard} {onSelect} {selectedIds} {dragIds} {onUploadAttachment} {onAttachLink} {onAddCard} />
+    <Stack {readOnly} {stack} {boardId} {onDrop} {onOpenCard} {onSelect} {selectedIds} {dragIds} {onUploadAttachment} {onAttachLink} {onAddCard} />
   {/each}
 </div>
 

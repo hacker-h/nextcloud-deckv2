@@ -3,7 +3,7 @@
   import Card from './Card.svelte';
   import { drag } from '../lib/dnd.svelte.js';
 
-  let { stack, boardId, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onUploadAttachment, onAttachLink, onAddCard } = $props();
+  let { readOnly = false, stack, boardId, onDrop, onOpenCard, onSelect, selectedIds = [], dragIds, onUploadAttachment, onAttachLink, onAddCard } = $props();
 
   let adding = $state(false);
   let title = $state('');
@@ -60,7 +60,7 @@
   const placeholderHeights = $derived(drag.heights.length ? drag.heights : [drag.h || 36]);
 </script>
 
-<section class="stack" class:over={isOver} data-stack-id={stack.id}>
+<section class="stack" class:over={isOver} data-stack-id={readOnly ? undefined : stack.id}>
   <header class="head">
     <h2 class="title">{stack.title}</h2>
     <span class="count">{stack.cards.length}</span>
@@ -73,7 +73,7 @@
           <div class="placeholder" style="height:{h}px"></div>
         {/each}
       {/if}
-      <Card {card} {onDrop} {onOpenCard} {onSelect} {dragIds} {onUploadAttachment} {onAttachLink} selected={selectedIds.includes(card.id)} selectionMode={selectedIds.length > 0} />
+      <Card {readOnly} {card} {onDrop} {onOpenCard} {onSelect} {dragIds} {onUploadAttachment} {onAttachLink} selected={selectedIds.includes(card.id)} selectionMode={selectedIds.length > 0} />
     {/each}
     {#if placeholderAt >= visible.length}
       {#each placeholderHeights as h}
@@ -82,6 +82,7 @@
     {/if}
   </div>
 
+  {#if !readOnly}
   <footer class="foot">
     {#if adding}
       <form class="composer" onsubmit={(event) => { event.preventDefault(); submit(); }}>
@@ -121,6 +122,7 @@
       </button>
     {/if}
   </footer>
+  {/if}
 </section>
 
 <style>

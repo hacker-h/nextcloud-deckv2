@@ -60,6 +60,7 @@ export class MockBackend {
     // Set by a spec to make the next matching request fail, so error paths are
     // reachable without a broken server.
     this.failNext = null;
+    this.plans = {};
     this.calendarEnabled = false;
     this.calendarEvents = [];
     this.calendarMappings = [];
@@ -100,7 +101,17 @@ export async function installMockBackend(page, { backend = new MockBackend() } =
   await page.route('**/auth/poll', (route) => json(route, { user: MOCK_USER }));
   await page.route('**/auth/logout', (route) => json(route, {}));
 
-  await page.route('**/integration/proton-calendar/**', async (route, request) => {
+  await page.route('**/planning/**', async (route, request) => {
+    const path = new URL(request.url()).pathname;
+    if (request.method() === 'GET') return json(route, backend.plans);
+    const body = request.postDataJSON();
+    backend.record(request.method(), request.url(), body);
+    const id = path.split('/').at(-1);
+    backend.plans[id] = { plan: body.plan, revision: String(Date.now()) };
+    return json(route, backend.plans[id]);
+  });
+
+  await page.route('**/integration/proton-calendar/**' , async (route, request) => {
     const url = new URL(request.url());
     const method = request.method();
     const raw = request.postData();
@@ -216,7 +227,14 @@ export async function installMockBackend(page, { backend = new MockBackend() } =
     const cardMatch = path.match(/^\/boards\/(\d+)\/stacks\/(\d+)\/cards\/(\d+)$/);
     if (cardMatch) {
       const card = backend.card(cardMatch[3]);
-      if (method === 'PUT' && card && body && typeof body === 'object') Object.assign(card, body);
+      if (method === 'PUT' && card && body && typeof body === 'object') {
+        const target = backend.stacks.find((stack) => stack.id === Number(cardMatch[2]));
+        if (target && card.stackId !== target.id) {
+          for (const stack of backend.stacks) stack.cards = stack.cards.filter((entry) => entry.id !== card.id);
+          target.cards.push(card);
+        }
+        Object.assign(card, body, { stackId: Number(cardMatch[2]), boardId: Number(cardMatch[1]) });
+      }
       return json(route, card ?? {});
     }
 

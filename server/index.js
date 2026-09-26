@@ -1,3 +1,4 @@
+import { PlanningStore } from './planning.js';
 import { createServer } from 'node:http';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -37,6 +38,7 @@ const app = createApp({
   sessions,
   nextcloud,
   calendarIntegration,
+  planningStore: new PlanningStore(resolve(dirname(config.sessionFile), 'planning.json')),
   agentTokens,
   agentRate: config.agent.enabled ? config.agent.rate : undefined,
   distDir,

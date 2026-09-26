@@ -36,7 +36,7 @@
 
   const due = $derived(toLocalInput(card?.duedate));
   const overdue = $derived.by(() => {
-    if (!card?.duedate) return false;
+    if (!card?.duedate || card.done) return false;
     const t = new Date(card.duedate).getTime();
     return !Number.isNaN(t) && t < Date.now();
   });

@@ -33,6 +33,7 @@ const HERMETIC = [
   'connection-status.spec.js',
   'description-formatting.spec.js',
   'card-links.spec.js',
+  'workflow.spec.js',
 ];
 
 // Specs that mutate a real Deck board. Skipped entirely when no credentials are

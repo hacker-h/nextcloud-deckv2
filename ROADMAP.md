@@ -18,4 +18,13 @@ Shipped. The Planner presents a seven-day view with Proton events, recurring occ
 
 ## Read-only board support
 
-Read-only boards remain hidden for now, matching the existing filter in `src/lib/deck.js:128` (`canEdit`). Showing boards the user can only view means more than adding them to the switcher: the UI needs to propagate read-only state through Board → Stack → Card → dnd so drag is disabled, card detail and editors render read-only, and add, archive, and delete affordances disappear. The access model added in `src/lib/permissions.js` already returns `'view'`, so this is UI work only rather than a model change. The live test case for the future feature is board 109, "Antonia Aufgaben", which is shared (`shared:1`) with `PERMISSION_EDIT:false`.
+Read-only boards are included in the switcher and search, marked with a leading lock. Cards open for inspection and attachment download; moving, editing, adding and planning are disabled. Board order can be changed between recent and alphabetical in Options.
+
+## Flexible planning and workflow
+
+See [workflow plan](docs/workflow-plan.md) for the requested defaults, architecture and regression coverage. The sidebar stores personal day/week/month plans independently of Deck deadlines; optional time suggestions consider loaded calendar events and the current board's plans. Timed plans are currently Deck v2 planning records, not new Proton events; the existing Planner remains the explicit Proton scheduling surface.
+
+## Low-priority requests
+
+- [Full offline startup and persistent mutation queue](https://github.com/hacker-h/nextcloud-deckv2/issues/4): after the current workflow features.
+- [Multiple instances](https://github.com/hacker-h/nextcloud-deckv2/issues/5): recorded, not part of this implementation.

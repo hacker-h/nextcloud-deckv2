@@ -12,6 +12,8 @@ export default defineConfig({
       // http://localhost:5173 and accepts mutating requests through the dev proxy.
       '/healthz': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/auth': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/planning': { target: 'http://127.0.0.1:3000', changeOrigin: false },
+      '/integration': { target: 'http://127.0.0.1:3000', changeOrigin: false },
       '/api': { target: 'http://127.0.0.1:3000', changeOrigin: false },
     },
   },

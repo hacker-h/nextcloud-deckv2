@@ -11,6 +11,7 @@ const THRESHOLD = 5; // px before a click becomes a drag
 
 export const drag = $state({
   active: false,
+  planTarget: null,
   cardIds: [],        // cards being dragged (multi-select ready)
   card: null,         // primary card, for the preview
   count: 1,
@@ -98,6 +99,7 @@ if (typeof window !== 'undefined') {
 
 export function resetDrag() {
   drag.active = false;
+  drag.planTarget = null;
   drag.cardIds = [];
   drag.card = null;
   drag.heights = [];
@@ -260,6 +262,7 @@ function onMove(e) {
 
   if (!g.moved) {
     if (Math.hypot(e.clientX - g.startX, e.clientY - g.startY) < THRESHOLD) return;
+    if (g.readOnly) return;
     g.moved = true;
     drag.active = true;
     drag.card = g.card;
@@ -279,7 +282,9 @@ function onMove(e) {
 
   // Hit-test stacks. elementsFromPoint sees through the preview because the
   // preview is pointer-events:none.
-  const stackEl = stackFromPoint(e.clientX, e.clientY);
+  const plan = document.elementsFromPoint(e.clientX, e.clientY).find((el) => el.dataset?.planStart);
+  drag.planTarget = plan ? { start: plan.dataset.planStart, granularity: plan.dataset.planKind } : null;
+  const stackEl = plan ? null : stackFromPoint(e.clientX, e.clientY);
 
   if (stackEl) {
     const stackId = Number(stackEl.dataset.stackId);
@@ -318,11 +323,13 @@ function onUp(e) {
   // Browser click synthesis happens after pointerup; drag has already consumed it.
   swallowNextClick();
 
+  const planTarget = drag.planTarget;
   const toStackId = drag.overStack;
   const index = drag.overIndex;
   const cardIds = [...drag.cardIds];
   resetDrag();
-  if (toStackId != null) gesture.onDrop({ cardIds, toStackId, index });
+  if (planTarget) window.dispatchEvent(new CustomEvent('deck:plan-drop', { detail: { cardIds, target: planTarget } }));
+  else if (toStackId != null) gesture.onDrop({ cardIds, toStackId, index });
 }
 
 // Attaches drag behaviour to a card element. onDrop receives
@@ -336,6 +343,7 @@ export function draggable(node, opts) {
     const o = opts();
     g = {
       moved: false,
+      readOnly: o.readOnly,
       startX: e.clientX,
       startY: e.clientY,
       card: o.card,

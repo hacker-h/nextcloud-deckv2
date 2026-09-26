@@ -4,7 +4,7 @@
   import { getChecklistSummary } from '../lib/checklist.js';
   import { isTemplateCard } from '../lib/cards.js';
 
-  let { card, onDrop, onOpenCard, onSelect, selected = false, selectionMode = false, dragIds, onUploadAttachment, onAttachLink } = $props();
+  let { readOnly = false, card, onDrop, onOpenCard, onSelect, selected = false, selectionMode = false, dragIds, onUploadAttachment, onAttachLink } = $props();
 
   let lightboxSrc = $state(null);
   let lightboxTitle = $state('');
@@ -63,6 +63,7 @@
   }
 
   function onTileDragOver(e) {
+    if (readOnly) return;
     const dt = e.dataTransfer;
     if (!dt) return;
     const isDragPayload = dt.types?.includes('Files') || dt.types?.includes('text/uri-list') || dt.types?.includes('text/plain') || dt.types?.includes('text/html');
@@ -75,6 +76,7 @@
   }
 
   function onTileDragEnter(e) {
+    if (readOnly) return;
     const dt = e.dataTransfer;
     if (!dt) return;
     const isDragPayload = dt.types?.includes('Files') || dt.types?.includes('text/uri-list') || dt.types?.includes('text/plain') || dt.types?.includes('text/html');
@@ -91,6 +93,7 @@
   }
 
   async function onTileDrop(e) {
+    if (readOnly) return;
     e.preventDefault();
     e.stopPropagation();
     clearExternalDrop();
@@ -134,6 +137,7 @@
   ondrop={onTileDrop}
   use:draggable={() => ({
     card,
+    readOnly,
     onDrop,
     cardIds: dragIds?.(card) ?? [card.id],
     onActivate: () => onOpenCard?.({ card }),
@@ -191,7 +195,7 @@
     {#if hasMeta}
       <div class="meta">
         {#if due}
-          <span class="badge due" class:overdue={card.overdue}>
+          <span class="badge due" class:overdue={card.overdue && !card.done} class:complete={Boolean(card.done)} title={card.done ? 'Erledigt' : 'Fällig'}>
             <svg viewBox="0 0 16 16" width="12" height="12" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true">
               <rect x="2.2" y="3.2" width="11.6" height="10.6" rx="1.6"/>
               <path d="M2.2 6.4h11.6M5.4 1.8v2.6M10.6 1.8v2.6" stroke-linecap="round"/>
@@ -351,6 +355,7 @@
   .badge { display: inline-flex; align-items: center; gap: 4px; }
   .badge svg { display: block; }
   .due { padding: 2px 4px; border-radius: 4px; }
+  .due.complete { background: #164b35; color: #7ee2b8; }
   .overdue { background: #5D1F1A; color: #FD9891; }
   .checklist-badge {
     padding: 2px 5px;

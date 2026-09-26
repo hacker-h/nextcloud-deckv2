@@ -1,3 +1,4 @@
+import { handlePlanning } from './planning.js';
 import { randomBytes } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { realpath, stat } from 'node:fs/promises';
@@ -25,7 +26,7 @@ const STATIC_TYPES = new Map([
   ['.map', 'application/json; charset=utf-8'],
 ]);
 
-export function createApp({ ncUrl, sessions, nextcloud, calendarIntegration = null, agentTokens = null, now = () => Date.now(), distDir = null, flowLimits = DEFAULT_FLOW_LIMITS, agentRate = DEFAULT_AGENT_RATE, audit = defaultAudit } = {}) {
+export function createApp({ ncUrl, sessions, nextcloud, calendarIntegration = null, planningStore = null, agentTokens = null, now = () => Date.now(), distDir = null, flowLimits = DEFAULT_FLOW_LIMITS, agentRate = DEFAULT_AGENT_RATE, audit = defaultAudit } = {}) {
   const flows = new Map();
   const nc = nextcloud;
   const agentHits = new Map();
@@ -59,6 +60,15 @@ export function createApp({ ncUrl, sessions, nextcloud, calendarIntegration = nu
       if (url.pathname === '/auth' || url.pathname.startsWith('/auth/')) return send(res, 404, { error: 'not found' });
       if (isAgentRoute(url.pathname)) {
         return await agentRequest({ req, res, url, ncUrl, sessions, agentTokens, calendarIntegration, agentHits, agentRate, now, audit });
+      }
+      if (url.pathname.startsWith('/planning/')) {
+        const session = sessionFrom(req, sessions);
+        if (session?.invalid) return send(res, 400, { error: 'invalid cookie' });
+        if (!session) return send(res, 401, { error: 'unauthenticated' });
+        if (!originAllowed(req, { requireOrigin: productionRequest(req) })) return send(res, 403, { error: 'forbidden' });
+        sessions.touch(session.sid);
+        const deck = new AgentDeckClient({ ncUrl, user: session.user, appPassword: session.appPassword });
+        return await handlePlanning({ req, res, url, user: session.user, deck, store: planningStore });
       }
       if (isCalendarRoute(url.pathname)) {
         const session = sessionFrom(req, sessions);
